@@ -1,0 +1,34 @@
+{
+  "name": "confluence-intranet-mirror",
+  "version": "1.0.0",
+  "description": "Mirror Confluence intranet for AI-powered Q&A",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "sync": "ts-node src/scripts/sync-confluence.ts",
+    "test": "jest"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3",
+    "pg": "^8.11.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.20",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.10.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.10.9",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.2"
+  }
+}

@@ -1,0 +1,166 @@
+import axios from "axios";
+import * as winston from "winston";
+
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || "info",
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.simple(),
+    }),
+  ],
+});
+
+export interface EmbeddingResponse {
+  embedding: number[];
+  index: number;
+  object: string;
+}
+
+export class EmbeddingService {
+  private apiKey: string;
+  private model: string = "text-embedding-3-small";
+
+  constructor(apiKey?: string, model?: string) {
+    this.apiKey = apiKey || process.env.OPENAI_API_KEY || "";
+    if (model) {
+      this.model = model;
+    }
+  }
+
+  /**
+   * Generate embeddings using OpenAI API
+   */
+  async generateEmbedding(text: string): Promise<number[]> {
+    if (!this.apiKey) {
+      logger.warn("OpenAI API key not configured, returning dummy embedding");
+      return this.generateDummyEmbedding(text);
+    }
+
+    try {
+      const response = await axios.post(
+        "https://api.openai.com/v1/embeddings",
+        {
+          input: text,
+          model: this.model,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return response.data.data[0].embedding;
+    } catch (error) {
+      logger.error("Failed to generate embedding", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      // Fallback to dummy embedding
+      return this.generateDummyEmbedding(text);
+    }
+  }
+
+  /**
+   * Generate embeddings for multiple texts in batch
+   */
+  async generateBatchEmbeddings(texts: string[]): Promise<number[][]> {
+    if (!this.apiKey) {
+      logger.warn("OpenAI API key not configured, returning dummy embeddings");
+      return texts.map((text) => this.generateDummyEmbedding(text));
+    }
+
+    try {
+      const response = await axios.post(
+        "https://api.openai.com/v1/embeddings",
+        {
+          input: texts,
+          model: this.model,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Sort by index to maintain order
+      return response.data.data
+        .sort((a: any, b: any) => a.index - b.index)
+        .map((item: any) => item.embedding);
+    } catch (error) {
+      logger.error("Failed to generate batch embeddings", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return texts.map((text) => this.generateDummyEmbedding(text));
+    }
+  }
+
+  /**
+   * Generate a dummy embedding (useful for development without API key)
+   * Uses simple hash-based approach
+   */
+  private generateDummyEmbedding(text: string, dimensions: number = 1536): number[] {
+    // Create a simple hash-based embedding for testing
+    const hash = this.hashString(text);
+    const embedding: number[] = [];
+
+    for (let i = 0; i < dimensions; i++) {
+      const seed = hash + i * 7919; // Use prime number for variety
+      const pseudoRandom = Math.sin(seed) * 10000;
+      embedding.push((pseudoRandom - Math.floor(pseudoRandom)) * 2 - 1);
+    }
+
+    // Normalize the embedding
+    return this.normalizeVector(embedding);
+  }
+
+  /**
+   * Simple hash function for string
+   */
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+  }
+
+  /**
+   * Normalize vector to unit length
+   */
+  private normalizeVector(vector: number[]): number[] {
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    if (magnitude === 0) return vector;
+    return vector.map((val) => val / magnitude);
+  }
+
+  /**
+   * Calculate cosine similarity between two embeddings
+   */
+  static cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) {
+      throw new Error("Embeddings must have same dimensions");
+    }
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+}
+
+export default new EmbeddingService();
