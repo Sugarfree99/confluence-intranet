@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confluence Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #10192a;
+        --paper: #f6f8fb;
+        --panel: #ffffff;
+        --line: #d7deea;
+        --accent: #1570ef;
+        --accent-soft: #e8f1ff;
+        --glow: #ffd16f;
+        --bot: #f2f6ff;
+        --user: #102748;
+        --user-text: #f7fbff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Space Grotesk", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 600px at 0% 0%, #d7ebff 0%, transparent 55%),
+          radial-gradient(700px 500px at 100% 100%, #ffe8bf 0%, transparent 55%),
+          var(--paper);
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+
+      .chat-shell {
+        width: min(980px, 100%);
+        height: min(780px, calc(100vh - 40px));
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        box-shadow:
+          0 1px 0 #ffffff,
+          0 14px 36px rgba(25, 45, 75, 0.12);
+      }
+
+      .chat-header {
+        padding: 18px 22px;
+        border-bottom: 1px solid transparent;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        transition: background 200ms ease, border-color 200ms ease;
+      }
+
+      .chat-header.scrolled {
+        background: #b8e6c1;
+        border-bottom-color: rgba(0, 0, 0, 0.08);
+      }
+
+      .chat-header .logo {
+        height: 40px;
+        width: auto;
+        flex-shrink: 0;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+        font-weight: 700;
+        color: #26b275;
+        letter-spacing: -0.01em;
+      }
+
+      .chat-log {
+        padding: 20px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .bubble {
+        max-width: 82%;
+        border-radius: 16px;
+        padding: 12px 14px;
+        line-height: 1.45;
+        animation: reveal 220ms ease-out;
+      }
+
+      .bubble.user {
+        margin-left: auto;
+        background: var(--user);
+        color: var(--user-text);
+        border-bottom-right-radius: 6px;
+      }
+
+      .bubble.bot {
+        background: var(--bot);
+        border: 1px solid #d8e3ff;
+        border-bottom-left-radius: 6px;
+      }
+
+      .meta {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .chip {
+        background: var(--accent-soft);
+        color: #0f3f86;
+        font-size: 12px;
+        border: 1px solid #c8dbff;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-family: "IBM Plex Mono", monospace;
+      }
+
+      .sources {
+        margin-top: 10px;
+        border-top: 1px dashed #cbd9f4;
+        padding-top: 10px;
+      }
+
+      .source-item {
+        background: #ffffff;
+        border: 1px solid #d5e0f8;
+        border-radius: 10px;
+        padding: 8px;
+        margin-top: 8px;
+      }
+
+      .source-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+
+      .source-excerpt {
+        margin: 0;
+        font-size: 13px;
+        color: #36445f;
+      }
+
+      .composer {
+        padding: 14px;
+        border-top: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      .composer-form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+
+      .composer-input {
+        width: 100%;
+        border: 1px solid #c8d4ea;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 15px;
+        font-family: inherit;
+        background: #fbfdff;
+      }
+
+      .composer-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(21, 112, 239, 0.17);
+      }
+
+      .send-btn {
+        border: 0;
+        border-radius: 14px;
+        padding: 0 22px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 13px;
+        color: #ffffff;
+        cursor: pointer;
+        background: #26b275;
+      }
+
+      .send-btn:hover:not([disabled]) {
+        background: #21a06a;
+      }
+
+      .send-btn[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .hint {
+        margin: 9px 2px 0;
+        font-size: 12px;
+        color: #62738f;
+      }
+
+      .typing {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+      }
+
+      .typing span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #5877ae;
+        animation: pulse 1s infinite ease-in-out;
+      }
+
+      .typing span:nth-child(2) {
+        animation-delay: 120ms;
+      }
+
+      .typing span:nth-child(3) {
+        animation-delay: 240ms;
+      }
+
+      @keyframes reveal {
+        from {
+          transform: translateY(6px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      @keyframes pulse {
+        0%,
+        80%,
+        100% {
+          opacity: 0.25;
+          transform: scale(0.7);
+        }
+        40% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 10px;
+        }
+
+        .chat-shell {
+          height: calc(100vh - 20px);
+          border-radius: 18px;
+        }
+
+        .bubble {
+          max-width: 94%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="chat-shell">
+      <header class="chat-header" id="chatHeader">
+        <img class="logo" src="/nordrest-logo.png" alt="Nordrest" />
+      </header>
+
+      <section id="chatLog" class="chat-log" aria-live="polite">
+        <article class="bubble bot">
+          Ask anything about your synced Confluence content. I will answer and list supporting sources.
+        </article>
+      </section>
+
+      <footer class="composer">
+        <form id="chatForm" class="composer-form">
+          <input
+            id="questionInput"
+            class="composer-input"
+            type="text"
+            placeholder="Ask a question..."
+            autocomplete="off"
+            required
+          />
+          <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
+        </form>
+        <p class="hint">This UI calls POST /api/qa/ask on the same server.</p>
+      </footer>
+    </main>
+
+    <script>
+      const chatLog = document.getElementById("chatLog");
+      const chatForm = document.getElementById("chatForm");
+      const questionInput = document.getElementById("questionInput");
+      const sendBtn = document.getElementById("sendBtn");
+      const chatHeader = document.getElementById("chatHeader");
+
+      chatLog.addEventListener("scroll", () => {
+        if (chatLog.scrollTop > 4) {
+          chatHeader.classList.add("scrolled");
+        } else {
+          chatHeader.classList.remove("scrolled");
+        }
+      });
+
+      function appendBubble(text, role = "bot", extras = null) {
+        const item = document.createElement("article");
+        item.className = `bubble ${role}`;
+        item.textContent = text;
+
+        if (extras && role === "bot") {
+          const meta = document.createElement("div");
+          meta.className = "meta";
+
+          if (typeof extras.confidence === "number") {
+            const confidenceChip = document.createElement("span");
+            confidenceChip.className = "chip";
+            confidenceChip.textContent = `confidence: ${(extras.confidence * 100).toFixed(0)}%`;
+            meta.appendChild(confidenceChip);
+          }
+
+          if (extras.sourcesCount > 0) {
+            const sourceChip = document.createElement("span");
+            sourceChip.className = "chip";
+            sourceChip.textContent = `sources: ${extras.sourcesCount}`;
+            meta.appendChild(sourceChip);
+          }
+
+          item.appendChild(meta);
+
+          if (Array.isArray(extras.sources) && extras.sources.length > 0) {
+            const sources = document.createElement("section");
+            sources.className = "sources";
+
+            extras.sources.slice(0, 3).forEach((s) => {
+              const sourceItem = document.createElement("div");
+              sourceItem.className = "source-item";
+
+              const title = document.createElement("p");
+              title.className = "source-title";
+              title.textContent = s.title || "Untitled source";
+
+              const excerpt = document.createElement("p");
+              excerpt.className = "source-excerpt";
+              excerpt.textContent = s.excerpt || "No excerpt";
+
+              sourceItem.appendChild(title);
+              sourceItem.appendChild(excerpt);
+              sources.appendChild(sourceItem);
+            });
+
+            item.appendChild(sources);
+          }
+        }
+
+        chatLog.appendChild(item);
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      function addTyping() {
+        const typing = document.createElement("article");
+        typing.className = "bubble bot";
+        typing.id = "typing";
+        typing.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+        chatLog.appendChild(typing);
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      function removeTyping() {
+        const typing = document.getElementById("typing");
+        if (typing) {
+          typing.remove();
+        }
+      }
+
+      chatForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const question = questionInput.value.trim();
+        if (!question) return;
+
+        appendBubble(question, "user");
+        questionInput.value = "";
+        questionInput.focus();
+        sendBtn.disabled = true;
+        addTyping();
+
+        try {
+          const response = await fetch("/api/qa/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question }),
+          });
+
+          const payload = await response.json();
+          removeTyping();
+
+          if (!response.ok || !payload.success) {
+            appendBubble(payload.error || "Request failed. Try again.", "bot");
+          } else {
+            const data = payload.data || {};
+            appendBubble(data.answer || "No answer returned.", "bot");
+          }
+        } catch (_error) {
+          removeTyping();
+          appendBubble("Could not reach the backend. Confirm that the server is running on port 3000.", "bot");
+        } finally {
+          sendBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,5 +1,7 @@
 import confluenceService from "../services/confluenceService";
 import dbService from "../services/dbService";
+import aiOptimizationService from "../services/aiOptimizationService";
+import embeddingService from "../services/embeddingService";
 import * as winston from "winston";
 import * as cheerio from "cheerio";
 
@@ -26,6 +28,8 @@ async function sync() {
 
     // Save each page
     let synced = 0;
+    let chunked = 0;
+    let embedded = 0;
     for (const page of pages) {
       try {
         // Extract text from HTML
@@ -44,6 +48,33 @@ async function sync() {
 
         synced++;
         logger.info(`Synced: ${page.title}`);
+
+        // Semantic chunking + embeddings
+        const savedPage = await dbService.getPageById(page.id);
+        if (savedPage?.id) {
+          const chunks = await aiOptimizationService.processPageIntoChunks(
+            Number(savedPage.id) || 0,
+            page.id,
+            page.title,
+            page.body.storage.value
+          );
+          chunked += chunks.length;
+
+          for (const chunk of chunks) {
+            if (chunk.id) {
+              try {
+                const embedding = await embeddingService.generateEmbedding(chunk.content);
+                await aiOptimizationService.saveEmbedding(chunk.id, embedding, embeddingService.getModel());
+                embedded++;
+              } catch (embedError) {
+                logger.error("Failed to embed chunk", {
+                  chunkId: chunk.id,
+                  error: embedError instanceof Error ? embedError.message : String(embedError),
+                });
+              }
+            }
+          }
+        }
       } catch (error) {
         logger.error("Failed to sync page", {
           pageId: page.id,
@@ -54,6 +85,7 @@ async function sync() {
     }
 
     logger.info(`✓ Successfully synced ${synced}/${pages.length} pages`);
+    logger.info(`✓ Created ${chunked} chunks, generated ${embedded} embeddings`);
 
     // Show stats
     const stats = await dbService.getSyncStats();

@@ -19,31 +19,54 @@ export interface EmbeddingResponse {
 
 export class EmbeddingService {
   private apiKey: string;
-  private model: string = "text-embedding-3-small";
+  private model: string;
 
   constructor(apiKey?: string, model?: string) {
-    this.apiKey = apiKey || process.env.OPENAI_API_KEY || "";
-    if (model) {
-      this.model = model;
-    }
+    this.apiKey = apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || "";
+    // Embedding model is separate from the chat model (GEMINI_MODEL).
+    // Defaults to Gemini's gemini-embedding-001.
+    this.model =
+      model ||
+      process.env.GEMINI_EMBEDDING_MODEL ||
+      process.env.OPENAI_EMBEDDING_MODEL ||
+      "gemini-embedding-001";
+  }
+
+  private isGeminiKey(): boolean {
+    // Gemini API keys start with "AIza"; OpenAI keys start with "sk-".
+    return !!process.env.GEMINI_API_KEY || this.apiKey.startsWith("AIza");
+  }
+
+  getModel(): string {
+    return this.model;
   }
 
   /**
-   * Generate embeddings using OpenAI API
+   * Generate embeddings using Gemini (default) or OpenAI.
    */
   async generateEmbedding(text: string): Promise<number[]> {
     if (!this.apiKey) {
-      logger.warn("OpenAI API key not configured, returning dummy embedding");
+      logger.warn("Embedding API key not configured, returning dummy embedding");
       return this.generateDummyEmbedding(text);
     }
 
     try {
+      if (this.isGeminiKey()) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:embedContent?key=${this.apiKey}`;
+        const response = await axios.post(
+          url,
+          {
+            model: `models/${this.model}`,
+            content: { parts: [{ text }] },
+          },
+          { headers: { "Content-Type": "application/json" } }
+        );
+        return response.data.embedding.values;
+      }
+
       const response = await axios.post(
         "https://api.openai.com/v1/embeddings",
-        {
-          input: text,
-          model: this.model,
-        },
+        { input: text, model: this.model },
         {
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
@@ -51,14 +74,11 @@ export class EmbeddingService {
           },
         }
       );
-
       return response.data.data[0].embedding;
     } catch (error) {
       logger.error("Failed to generate embedding", {
         error: error instanceof Error ? error.message : String(error),
       });
-
-      // Fallback to dummy embedding
       return this.generateDummyEmbedding(text);
     }
   }
@@ -68,17 +88,29 @@ export class EmbeddingService {
    */
   async generateBatchEmbeddings(texts: string[]): Promise<number[][]> {
     if (!this.apiKey) {
-      logger.warn("OpenAI API key not configured, returning dummy embeddings");
+      logger.warn("Embedding API key not configured, returning dummy embeddings");
       return texts.map((text) => this.generateDummyEmbedding(text));
     }
 
     try {
+      if (this.isGeminiKey()) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:batchEmbedContents?key=${this.apiKey}`;
+        const response = await axios.post(
+          url,
+          {
+            requests: texts.map((text) => ({
+              model: `models/${this.model}`,
+              content: { parts: [{ text }] },
+            })),
+          },
+          { headers: { "Content-Type": "application/json" } }
+        );
+        return response.data.embeddings.map((e: any) => e.values);
+      }
+
       const response = await axios.post(
         "https://api.openai.com/v1/embeddings",
-        {
-          input: texts,
-          model: this.model,
-        },
+        { input: texts, model: this.model },
         {
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
@@ -87,7 +119,6 @@ export class EmbeddingService {
         }
       );
 
-      // Sort by index to maintain order
       return response.data.data
         .sort((a: any, b: any) => a.index - b.index)
         .map((item: any) => item.embedding);
@@ -95,7 +126,6 @@ export class EmbeddingService {
       logger.error("Failed to generate batch embeddings", {
         error: error instanceof Error ? error.message : String(error),
       });
-
       return texts.map((text) => this.generateDummyEmbedding(text));
     }
   }
@@ -104,7 +134,7 @@ export class EmbeddingService {
    * Generate a dummy embedding (useful for development without API key)
    * Uses simple hash-based approach
    */
-  private generateDummyEmbedding(text: string, dimensions: number = 1536): number[] {
+  private generateDummyEmbedding(text: string, dimensions: number = 768): number[] {
     // Create a simple hash-based embedding for testing
     const hash = this.hashString(text);
     const embedding: number[] = [];

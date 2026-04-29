@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 import apiRoutes from "./routes";
 import { config } from "./config";
 import dbService from "./services/dbService";
@@ -22,6 +23,7 @@ const logger = winston.createLogger({
 });
 
 const app = express();
+const publicDir = path.join(__dirname, "../public");
 
 // CORS Configuration
 app.use(cors({
@@ -34,6 +36,7 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(publicDir));
 
 // Logging middleware
 app.use((req, _res, next) => {
@@ -43,6 +46,11 @@ app.use((req, _res, next) => {
 
 // Routes
 app.use("/api", apiRoutes);
+
+// Chat UI
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
 
 // Simple auth endpoint for testing
 app.post("/auth/login", (req, res) => {

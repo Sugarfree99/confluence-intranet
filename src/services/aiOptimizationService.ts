@@ -133,7 +133,7 @@ export class AIOptimizationService {
 
       await this.pool.query(query, [
         chunkId,
-        JSON.stringify(embedding),
+        embedding,
         model,
       ]);
     } catch (error) {

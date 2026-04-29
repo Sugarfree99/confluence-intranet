@@ -25,94 +25,85 @@ export class TextChunkingService {
   static readonly DEFAULT_MAX_CHARS = 1000;
 
   /**
-   * Parse HTML content and extract semantic chunks
+   * Parse HTML content and extract semantic chunks.
+   *
+   * Walks the full DOM (not just root children) so it handles HTML fragments
+   * that cheerio auto-wraps in <html><body>, as well as Confluence storage
+   * format where content sits inside <ac:rich-text-body> macros.
    */
   static parseHTML(html: string): Array<{ type: string; content: string }> {
     const $ = cheerio.load(html);
     const elements: Array<{ type: string; content: string }> = [];
+    const seen = new Set<any>();
 
-    // Extract structured content
-    $.root()
-      .children()
-      .each((_, el) => {
-        const tagName = el.name?.toLowerCase();
+    const SELECTOR = "h1, h2, h3, h4, h5, h6, p, pre, code, ul, ol, table, blockquote";
 
-        switch (tagName) {
-          case "h1":
-          case "h2":
-          case "h3":
-          case "h4":
-          case "h5":
-          case "h6":
-            elements.push({
-              type: "heading",
-              content: $.text($(el)).trim(),
-            });
-            break;
+    $(SELECTOR).each((_, el) => {
+      // Skip nested elements already covered by an ancestor we'll emit
+      // (e.g. <p> inside <blockquote>, <code> inside <pre>, <li> handled via <ul>)
+      const $el = $(el);
+      if ($el.parents("pre, blockquote, ul, ol, table").length > 0) return;
+      if (seen.has(el)) return;
+      seen.add(el);
 
-          case "p":
-            const text = $.text($(el)).trim();
-            if (text) {
-              elements.push({
-                type: "paragraph",
-                content: text,
-              });
-            }
-            break;
+      const tagName = (el as any).name?.toLowerCase();
+      let item: { type: string; content: string } | null = null;
 
-          case "pre":
-          case "code":
-            elements.push({
-              type: "code",
-              content: $.text($(el)).trim(),
-            });
-            break;
-
-          case "ul":
-          case "ol":
-            const items: string[] = [];
-            $(el)
-              .find("li")
-              .each((_, li) => {
-                items.push("• " + $.text($(li)).trim());
-              });
-            if (items.length > 0) {
-              elements.push({
-                type: "list",
-                content: items.join("\n"),
-              });
-            }
-            break;
-
-          case "table":
-            const rows: string[] = [];
-            $(el)
-              .find("tr")
-              .each((_, tr) => {
-                const cells: string[] = [];
-                $(tr)
-                  .find("td, th")
-                  .each((_, td) => {
-                    cells.push($.text($(td)).trim());
-                  });
-                rows.push(cells.join(" | "));
-              });
-            if (rows.length > 0) {
-              elements.push({
-                type: "table",
-                content: rows.join("\n"),
-              });
-            }
-            break;
-
-          case "blockquote":
-            elements.push({
-              type: "quote",
-              content: $.text($(el)).trim(),
-            });
-            break;
+      switch (tagName) {
+        case "h1":
+        case "h2":
+        case "h3":
+        case "h4":
+        case "h5":
+        case "h6": {
+          const text = $el.text().trim();
+          if (text) item = { type: "heading", content: text };
+          break;
         }
-      });
+        case "p": {
+          const text = $el.text().trim();
+          if (text) item = { type: "paragraph", content: text };
+          break;
+        }
+        case "pre":
+        case "code": {
+          const text = $el.text().trim();
+          if (text) item = { type: "code", content: text };
+          break;
+        }
+        case "ul":
+        case "ol": {
+          const items: string[] = [];
+          $el.find("li").each((_, li) => {
+            const t = $(li).text().trim();
+            if (t) items.push("• " + t);
+          });
+          if (items.length > 0) item = { type: "list", content: items.join("\n") };
+          break;
+        }
+        case "table": {
+          const rows: string[] = [];
+          $el.find("tr").each((_, tr) => {
+            const cells: string[] = [];
+            $(tr)
+              .find("td, th")
+              .each((_, td) => {
+                cells.push($(td).text().trim());
+              });
+            if (cells.length) rows.push(cells.join(" | "));
+          });
+          if (rows.length > 0) item = { type: "table", content: rows.join("\n") };
+          break;
+        }
+        case "blockquote": {
+          const text = $el.text().trim();
+          if (text) item = { type: "quote", content: text };
+          break;
+        }
+      }
+
+      if (item) elements.push(item);
+    });
 
     return elements;
   }
