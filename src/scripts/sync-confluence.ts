@@ -26,6 +26,8 @@ async function sync() {
 
     // Save each page
     let synced = 0;
+    let attachmentsSynced = 0;
+    let attachmentsRemoved = 0;
     for (const page of pages) {
       try {
         // Extract text from HTML
@@ -43,7 +45,39 @@ async function sync() {
         });
 
         synced++;
-        logger.info(`Synced: ${page.title}`);
+
+        // Sync attachments for this page
+        try {
+          const attachments = await confluenceService.getPageAttachments(page.id);
+          const keepIds: string[] = [];
+          for (const att of attachments) {
+            const ext = att.extensions || {};
+            await dbService.saveAttachment({
+              confluence_id: att.id,
+              page_confluence_id: page.id,
+              title: att.title,
+              file_name: ext.fileName || att.title,
+              media_type: ext.mediaType || null,
+              file_size: typeof ext.fileSize === "number" ? ext.fileSize : null,
+              download_url: att._links?.download || null,
+              web_url: att._links?.webui || null,
+              version: att.version?.number || null,
+            });
+            keepIds.push(att.id);
+            attachmentsSynced++;
+          }
+          // Remove attachments that no longer exist on this page
+          attachmentsRemoved += await dbService.deleteAttachmentsForPage(page.id, keepIds);
+          logger.info(
+            `Synced: ${page.title} (${attachments.length} bilagor)`
+          );
+        } catch (attErr) {
+          logger.error("Failed to sync attachments", {
+            pageId: page.id,
+            error: attErr instanceof Error ? attErr.message : String(attErr),
+          });
+          logger.info(`Synced: ${page.title}`);
+        }
       } catch (error) {
         logger.error("Failed to sync page", {
           pageId: page.id,
@@ -54,12 +88,18 @@ async function sync() {
     }
 
     logger.info(`✓ Successfully synced ${synced}/${pages.length} pages`);
+    logger.info(
+      `✓ Synced ${attachmentsSynced} attachments (${attachmentsRemoved} borttagna)`
+    );
 
     // Show stats
     const stats = await dbService.getSyncStats();
+    const attStats = await dbService.getAttachmentStats();
     logger.info("Sync statistics", {
       totalPages: stats.total,
       lastSync: stats.lastSync,
+      totalAttachments: attStats.total,
+      totalAttachmentSize: attStats.totalSize,
     });
 
     await dbService.close();

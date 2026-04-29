@@ -109,6 +109,42 @@ export class ConfluenceService {
     return response;
   }
 
+  async getPageAttachments(pageId: string): Promise<any[]> {
+    const attachments: any[] = [];
+    let start = 0;
+    const limit = 100;
+    let hasMore = true;
+
+    while (hasMore) {
+      try {
+        const response = await axios.get(
+          `${this.baseUrl}/rest/api/content/${pageId}/child/attachment`,
+          {
+            params: { start, limit, expand: "version,metadata" },
+            headers: {
+              Authorization: `Basic ${this.auth}`,
+              Accept: "application/json",
+            },
+          }
+        );
+        const data = response.data;
+        attachments.push(...(data.results || []));
+        if (data._links && data._links.next) {
+          start += limit;
+        } else {
+          hasMore = false;
+        }
+      } catch (error) {
+        logger.error("Failed to fetch attachments", {
+          pageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        hasMore = false;
+      }
+    }
+    return attachments;
+  }
+
   async getAllPages(): Promise<ConfluencePage[]> {
     return this.getSpacePages(config.confluence.spaceKey);
   }

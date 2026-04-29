@@ -117,6 +117,89 @@ export class DatabaseService {
     };
   }
 
+  async saveAttachment(att: {
+    confluence_id: string;
+    page_confluence_id: string;
+    title: string;
+    file_name?: string;
+    media_type?: string;
+    file_size?: number;
+    download_url?: string;
+    web_url?: string;
+    version?: number;
+  }): Promise<void> {
+    const query = `
+      INSERT INTO attachments (
+        confluence_id, page_id, page_confluence_id, title, file_name,
+        media_type, file_size, download_url, web_url, version, last_synced
+      )
+      VALUES (
+        $1,
+        (SELECT id FROM pages WHERE confluence_id = $2),
+        $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP
+      )
+      ON CONFLICT (confluence_id) DO UPDATE SET
+        page_id = (SELECT id FROM pages WHERE confluence_id = $2),
+        page_confluence_id = $2,
+        title = $3,
+        file_name = $4,
+        media_type = $5,
+        file_size = $6,
+        download_url = $7,
+        web_url = $8,
+        version = $9,
+        last_synced = CURRENT_TIMESTAMP
+    `;
+    await this.pool.query(query, [
+      att.confluence_id,
+      att.page_confluence_id,
+      att.title,
+      att.file_name || null,
+      att.media_type || null,
+      att.file_size || null,
+      att.download_url || null,
+      att.web_url || null,
+      att.version || null,
+    ]);
+  }
+
+  async getAttachmentsByPageId(pageConfluenceId: string): Promise<any[]> {
+    const query = `
+      SELECT * FROM attachments
+      WHERE page_confluence_id = $1
+      ORDER BY title
+    `;
+    const result = await this.pool.query(query, [pageConfluenceId]);
+    return result.rows;
+  }
+
+  async deleteAttachmentsForPage(pageConfluenceId: string, keepIds: string[]): Promise<number> {
+    if (keepIds.length === 0) {
+      const r = await this.pool.query(
+        "DELETE FROM attachments WHERE page_confluence_id = $1",
+        [pageConfluenceId]
+      );
+      return r.rowCount || 0;
+    }
+    const r = await this.pool.query(
+      `DELETE FROM attachments
+       WHERE page_confluence_id = $1
+         AND confluence_id <> ALL($2::text[])`,
+      [pageConfluenceId, keepIds]
+    );
+    return r.rowCount || 0;
+  }
+
+  async getAttachmentStats(): Promise<{ total: number; totalSize: number }> {
+    const r = await this.pool.query(
+      "SELECT COUNT(*)::int AS total, COALESCE(SUM(file_size),0)::bigint AS total_size FROM attachments"
+    );
+    return {
+      total: parseInt(r.rows[0].total),
+      totalSize: parseInt(r.rows[0].total_size),
+    };
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }
