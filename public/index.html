@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -33,14 +33,11 @@
         min-height: 100vh;
         font-family: "Space Grotesk", sans-serif;
         color: var(--ink);
-        background:
-          radial-gradient(1200px 600px at 0% 0%, #d7ebff 0%, transparent 55%),
-          radial-gradient(700px 500px at 100% 100%, #ffe8bf 0%, transparent 55%),
-          var(--paper);
+        background: #fff;
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 0 20px 20px;
+        padding: 0;
       }
 
       .chat-header {
@@ -48,17 +45,30 @@
         top: 0;
         z-index: 10;
         width: 100%;
-        display: flex;
-        justify-content: flex-start;
-        padding: 10px 28px;
+        padding: 10px 0;
         border-bottom: 1px solid transparent;
         background: transparent;
         transition: background 200ms ease, border-color 200ms ease;
       }
 
       .chat-header.scrolled {
-        background: #b8e6c1;
         border-bottom-color: rgba(0, 0, 0, 0.08);
+        background: #b8e6c1;
+      }
+
+      .wrapper {
+        max-width: 1300px;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        margin: 0 auto;
+        padding: 0 2%;
+      }
+
+      .header-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
       }
 
       .chat-header .logo {
@@ -67,10 +77,45 @@
         flex-shrink: 0;
       }
 
+      .menu-btn {
+        border: 0;
+        background: transparent;
+        color: #1d6e4e;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 46px;
+        height: 46px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+
+      .menu-btn:hover {
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .chat-header.scrolled .menu-btn {
+        color: #1d6e4e;
+      }
+
+      .menu-icon {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .menu-icon span {
+        display: block;
+        width: 20px;
+        height: 2px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
       .chat-shell {
         width: min(980px, 100%);
         height: min(780px, calc(100vh - 110px));
-        margin-top: 14px;
+        margin-top: 0;
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 24px;
@@ -80,6 +125,83 @@
         box-shadow:
           0 1px 0 #ffffff,
           0 14px 36px rgba(25, 45, 75, 0.12);
+      }
+
+      .content-block {
+        width: 100%;
+        max-width: 1300px;
+        padding: 50px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .site-footer {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        background: #404040;
+        padding: 20px;
+      }
+
+      .footer-inner {
+        width: 100%;
+        max-width: 1300px;
+        display: flex;
+        justify-content: center;
+      }
+
+      .footer-block {
+        padding: 50px 0;
+      }
+
+      .footer-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+      }
+
+      .footer-logo-wrap {
+        height: 72px;
+        display: flex;
+        align-items: center;
+      }
+
+      .site-footer .footer-logo {
+        height: 100%;
+        width: auto;
+        margin-bottom: 15px;
+      }
+
+      .site-footer .footer-text {
+        margin: 0;
+        font-size: 15px;
+        color: #ffffff;
+      }
+
+      .logout-form {
+        margin-top: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .logout-form p {
+        margin: 0;
+        color: #ffffff;
+      }
+
+      .logout-form .logout-btn {
+        border: 0;
+        background: #ffffff;
+        color: #1f1f1f;
+        padding: 10px 20px;
+        border-radius: 2px;
+        font-family: inherit;
+        font-size: 16px;
+        cursor: pointer;
       }
 
       .chat-log {
@@ -125,7 +247,7 @@
         border: 1px solid #c8dbff;
         border-radius: 999px;
         padding: 4px 10px;
-        font-family: "IBM Plex Mono", monospace;
+        font-family: inherit;
       }
 
       .sources {
@@ -186,7 +308,7 @@
         border: 0;
         border-radius: 14px;
         padding: 0 22px;
-        font-family: "IBM Plex Mono", monospace;
+        font-family: inherit;
         font-size: 13px;
         color: #ffffff;
         cursor: pointer;
@@ -256,21 +378,41 @@
 
       @media (max-width: 720px) {
         body {
-          padding: 0 10px 10px;
+          padding: 0;
         }
 
         .chat-shell {
           height: calc(100vh - 96px);
-          margin-top: 10px;
           border-radius: 18px;
         }
 
+        .content-block {
+          padding: 50px 10px;
+        }
+
         .chat-header {
-          padding: 8px 14px;
+          padding: 8px 0;
         }
 
         .chat-header .logo {
           height: 44px;
+        }
+
+        .menu-btn {
+          width: 40px;
+          height: 40px;
+        }
+
+        .site-footer .footer-logo {
+          height: 100%;
+        }
+
+        .site-footer .footer-text {
+          font-size: 14px;
+        }
+
+        .footer-logo-wrap {
+          height: 58px;
         }
 
         .bubble {
@@ -281,30 +423,60 @@
   </head>
   <body>
     <header class="chat-header" id="chatHeader">
-      <img class="logo" src="/Nordrest.png" alt="Nordrest" />
+      <div class="wrapper header-wrapper">
+        <img class="logo" src="/Nordrest.png" alt="Nordrest" />
+        <button class="menu-btn" type="button" aria-label="Open menu">
+          <span class="menu-icon" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </button>
+      </div>
     </header>
 
-    <main class="chat-shell">
-      <section id="chatLog" class="chat-log" aria-live="polite">
-        <article class="bubble bot">
-          Ask anything about your synced Confluence content. I will answer and list supporting sources.
-        </article>
-      </section>
+    <div class="content-block">
+      <main class="chat-shell">
+        <section id="chatLog" class="chat-log" aria-live="polite">
+          <article class="bubble bot">
+            Ask anything about your synced Confluence content. I will answer and list supporting sources.
+          </article>
+        </section>
 
-      <footer class="composer">
-        <form id="chatForm" class="composer-form">
-          <input
-            id="questionInput"
-            class="composer-input"
-            type="text"
-            placeholder="Ask a question..."
-            autocomplete="off"
-            required
-          />
-          <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
-        </form>
-      </footer>
-    </main>
+        <footer class="composer">
+          <form id="chatForm" class="composer-form">
+            <input
+              id="questionInput"
+              class="composer-input"
+              type="text"
+              placeholder="Ask a question..."
+              autocomplete="off"
+              required
+            />
+            <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
+          </form>
+        </footer>
+      </main>
+    </div>
+
+    <footer class="site-footer" aria-label="Site footer">
+      <div class="footer-inner">
+        <div class="footer-block">
+          <div class="footer-content">
+            <div class="footer-logo-wrap">
+              <img class="footer-logo" src="/Nordrest.png" alt="Nordrest" />
+            </div>
+            <p class="footer-text">Copyright © Nordrest 2026</p>
+            <div class="logout-form">
+              <p>Du är inloggad som Nordrestanställd</p>
+              <form action="/sv/" enctype="multipart/form-data" method="post">
+                <button class="logout-btn" type="submit">Logga ut</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
 
     <script>
       const chatLog = document.getElementById("chatLog");
@@ -313,13 +485,20 @@
       const sendBtn = document.getElementById("sendBtn");
       const chatHeader = document.getElementById("chatHeader");
 
-      chatLog.addEventListener("scroll", () => {
-        if (chatLog.scrollTop > 4) {
+      function updateHeaderState() {
+        const pageScrolled = window.scrollY > 4;
+        const chatScrolled = chatLog.scrollTop > 4;
+
+        if (pageScrolled || chatScrolled) {
           chatHeader.classList.add("scrolled");
         } else {
           chatHeader.classList.remove("scrolled");
         }
-      });
+      }
+
+      chatLog.addEventListener("scroll", updateHeaderState);
+      window.addEventListener("scroll", updateHeaderState, { passive: true });
+      updateHeaderState();
 
       function appendBubble(text, role = "bot", extras = null) {
         const item = document.createElement("article");
