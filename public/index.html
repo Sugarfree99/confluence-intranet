@@ -37,32 +37,22 @@
           radial-gradient(1200px 600px at 0% 0%, #d7ebff 0%, transparent 55%),
           radial-gradient(700px 500px at 100% 100%, #ffe8bf 0%, transparent 55%),
           var(--paper);
-        display: grid;
-        place-items: center;
-        padding: 20px;
-      }
-
-      .chat-shell {
-        width: min(980px, 100%);
-        height: min(780px, calc(100vh - 40px));
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 24px;
-        overflow: hidden;
-        display: grid;
-        grid-template-rows: auto 1fr auto;
-        box-shadow:
-          0 1px 0 #ffffff,
-          0 14px 36px rgba(25, 45, 75, 0.12);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 20px 20px;
       }
 
       .chat-header {
-        padding: 18px 22px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        width: 100%;
+        display: flex;
+        justify-content: flex-start;
+        padding: 10px 28px;
         border-bottom: 1px solid transparent;
         background: transparent;
-        display: flex;
-        align-items: center;
-        gap: 14px;
         transition: background 200ms ease, border-color 200ms ease;
       }
 
@@ -72,17 +62,24 @@
       }
 
       .chat-header .logo {
-        height: 40px;
+        height: 56px;
         width: auto;
         flex-shrink: 0;
       }
 
-      h1 {
-        margin: 0;
-        font-size: clamp(1.3rem, 2.6vw, 1.7rem);
-        font-weight: 700;
-        color: #26b275;
-        letter-spacing: -0.01em;
+      .chat-shell {
+        width: min(980px, 100%);
+        height: min(780px, calc(100vh - 110px));
+        margin-top: 14px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        box-shadow:
+          0 1px 0 #ffffff,
+          0 14px 36px rgba(25, 45, 75, 0.12);
       }
 
       .chat-log {
@@ -259,12 +256,21 @@
 
       @media (max-width: 720px) {
         body {
-          padding: 10px;
+          padding: 0 10px 10px;
         }
 
         .chat-shell {
-          height: calc(100vh - 20px);
+          height: calc(100vh - 96px);
+          margin-top: 10px;
           border-radius: 18px;
+        }
+
+        .chat-header {
+          padding: 8px 14px;
+        }
+
+        .chat-header .logo {
+          height: 44px;
         }
 
         .bubble {
@@ -274,11 +280,11 @@
     </style>
   </head>
   <body>
-    <main class="chat-shell">
-      <header class="chat-header" id="chatHeader">
-        <img class="logo" src="/nordrest-logo.png" alt="Nordrest" />
-      </header>
+    <header class="chat-header" id="chatHeader">
+      <img class="logo" src="/Nordrest.png" alt="Nordrest" />
+    </header>
 
+    <main class="chat-shell">
       <section id="chatLog" class="chat-log" aria-live="polite">
         <article class="bubble bot">
           Ask anything about your synced Confluence content. I will answer and list supporting sources.
@@ -297,7 +303,6 @@
           />
           <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
         </form>
-        <p class="hint">This UI calls POST /api/qa/ask on the same server.</p>
       </footer>
     </main>
 
