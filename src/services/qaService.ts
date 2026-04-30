@@ -402,9 +402,91 @@ export class QAService {
 
   // ---------- generation ----------
 
+  /**
+   * Build a slug for a document title that matches the `/doc/:slug` route.
+   */
+  private slugify(title: string): string {
+    return (title || "")
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .substring(0, 120);
+  }
+
+  /**
+   * Format chat history as plain text for an LLM prompt.
+   */
+  private formatHistory(history: ChatTurn[]): string {
+    if (!history || history.length === 0) return "";
+    return history
+      .filter((h) => h && (h.role === "user" || h.role === "assistant") && h.content)
+      .map((h) => `${h.role === "user" ? "Användare" : "Assistent"}: ${h.content}`)
+      .join("\n");
+  }
+
+  /**
+   * If the user has previous turns, ask the LLM to rewrite the current
+   * (potentially context-dependent) question into a standalone search
+   * query. Falls back to the original question on any failure.
+   */
+  private async rewriteFollowUp(question: string, history: ChatTurn[]): Promise<string> {
+    if (!history || history.length === 0) return question;
+    if (!this.llm.isConfigured()) return question;
+
+    const convo = this.formatHistory(history);
+    const prompt = `Du får en kort konversation och en uppföljningsfråga. Skriv om uppföljningsfrågan så att den blir helt fristående och förståelig utan tidigare kontext. Behåll språket (svenska). Returnera ENBART den omskrivna frågan, inget annat.
+
+Konversation:
+${convo}
+
+Uppföljningsfråga: ${question}
+
+Fristående fråga:`;
+
+    try {
+      const rewritten = await this.llm.generate(prompt, { temperature: 0 });
+      const cleaned = (rewritten || "").trim().replace(/^["']|["']$/g, "");
+      if (!cleaned || cleaned.length > 400) return question;
+      logger.info("Rewrote follow-up question", { original: question, rewritten: cleaned });
+      return cleaned;
+    } catch (err) {
+      logger.warn("Follow-up rewrite failed; using original question", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return question;
+    }
+  }
+
+  /**
+   * Build the markdown source-link footer that gets appended to the answer.
+   * One link per unique source page, max 3, in score order.
+   */
+  private buildSourceFooter(
+    sources: Array<{ title: string; url?: string; pageId: number }>
+  ): string {
+    if (!sources || sources.length === 0) return "";
+    const seen = new Set<number>();
+    const lines: string[] = [];
+    for (const s of sources) {
+      if (seen.has(s.pageId)) continue;
+      seen.add(s.pageId);
+      const title = s.title || "Dokument";
+      const slug = this.slugify(title);
+      if (!slug) continue;
+      lines.push(`- [${title}](/doc/${slug})`);
+      if (lines.length >= 3) break;
+    }
+    if (lines.length === 0) return "";
+    return `\n\n**Källor:**\n${lines.join("\n")}`;
+  }
+
   private async generateAnswerFromChunks(
     question: string,
-    chunks: ChunkCandidate[]
+    chunks: ChunkCandidate[],
+    history: ChatTurn[] = []
   ): Promise<{ answer: string; confidence: number }> {
     if (chunks.length === 0) {
       return {
@@ -425,11 +507,16 @@ export class QAService {
       .map((c, i) => `[${i + 1}] ${c.title}\n${c.content}`)
       .join("\n\n---\n\n");
 
+    const historyBlock = this.formatHistory(history);
+    const historySection = historyBlock
+      ? `Tidigare konversation (för att förstå följdfrågor):\n${historyBlock}\n\n`
+      : "";
+
     const prompt = `Du är en assistent som svarar på frågor om företagets interna dokumentation. Använd ENBART informationen i kontexten nedan. Om svaret inte finns där, säg det rakt ut.
 
 Svara på svenska, kort och konkret. Inkludera INTE några källhänvisningar, fotnoter eller referenser som [1], [2] osv. i ditt svar.
 
-Fråga: ${question}
+${historySection}Fråga: ${question}
 
 Kontext:
 ${context}
@@ -456,7 +543,8 @@ Svar:`;
 
   private async generateAnswer(
     question: string,
-    pages: PageCandidate[]
+    pages: PageCandidate[],
+    history: ChatTurn[] = []
   ): Promise<{ answer: string; confidence: number }> {
     if (pages.length === 0) {
       return {
@@ -477,11 +565,16 @@ Svar:`;
       .map((p, i) => `[${i + 1}] ${p.title}\n${p.content}`)
       .join("\n\n---\n\n");
 
+    const historyBlock = this.formatHistory(history);
+    const historySection = historyBlock
+      ? `Tidigare konversation (för att förstå följdfrågor):\n${historyBlock}\n\n`
+      : "";
+
     const prompt = `Du är en assistent som svarar på frågor om företagets interna dokumentation. Använd ENBART informationen i kontexten nedan. Om svaret inte finns där, säg det rakt ut.
 
 Svara på svenska, kort och konkret. Inkludera INTE några källhänvisningar, fotnoter eller referenser som [1], [2] osv. i ditt svar.
 
-Fråga: ${question}
+${historySection}Fråga: ${question}
 
 Kontext:
 ${context}
@@ -507,20 +600,22 @@ Svar:`;
     }
   }
 
-  async answerQuestion(question: string, _history: ChatTurn[] = []): Promise<QAResult> {
-    // History is intentionally ignored: mixing prior turns into the
-    // retrieval query (and into the LLM prompt) was diluting the signal
-    // for the actual question and pulling in unrelated chunks. Each
-    // question is now answered standalone against the corpus.
-    logger.info("Answering question", { question });
+  async answerQuestion(question: string, history: ChatTurn[] = []): Promise<QAResult> {
+    logger.info("Answering question", { question, historyTurns: history.length });
+
+    // If there is prior conversation, rewrite the (possibly context-dependent)
+    // question into a standalone search query before retrieval. The original
+    // question + full history are still passed to the LLM for generation.
+    const searchQuery = await this.rewriteFollowUp(question, history);
 
     // ---- 1. Try chunk-level retrieval first --------------------------------
-    const chunks = await this.searchRelevantChunks(question);
+    const chunks = await this.searchRelevantChunks(searchQuery);
 
     if (chunks.length > 0) {
       const { answer, confidence } = await this.generateAnswerFromChunks(
         question,
-        chunks
+        chunks,
+        history
       );
 
       // De-duplicate sources by page_id, keeping the best-scoring chunk.
@@ -529,7 +624,10 @@ Svar:`;
         const prev = sourceMap.get(c.page_id);
         if (!prev || c.score > prev.score) sourceMap.set(c.page_id, c);
       }
-      const sources = Array.from(sourceMap.values()).map((c) => ({
+      const ranked = Array.from(sourceMap.values()).sort(
+        (a, b) => b.score - a.score
+      );
+      const sources = ranked.map((c) => ({
         pageId: c.page_id,
         title: c.title,
         url: c.url,
@@ -537,12 +635,13 @@ Svar:`;
         relevance: c.score,
       }));
 
-      return { answer, sources, confidence };
+      const footer = this.buildSourceFooter(sources);
+      return { answer: answer + footer, sources, confidence };
     }
 
     // ---- 2. Fallback: page-level retrieval (legacy / pre-chunked DBs) ------
     logger.info("No chunks matched, falling back to page-level retrieval");
-    const pages = await this.searchRelevantPages(question);
+    const pages = await this.searchRelevantPages(searchQuery);
 
     if (pages.length === 0) {
       return {
@@ -553,7 +652,7 @@ Svar:`;
       };
     }
 
-    const { answer, confidence } = await this.generateAnswer(question, pages);
+    const { answer, confidence } = await this.generateAnswer(question, pages, history);
 
     const sources = pages.map((p) => ({
       pageId: p.page_id,
@@ -563,7 +662,8 @@ Svar:`;
       relevance: p.score,
     }));
 
-    return { answer, sources, confidence };
+    const footer = this.buildSourceFooter(sources);
+    return { answer: answer + footer, sources, confidence };
   }
 
   async close(): Promise<void> {

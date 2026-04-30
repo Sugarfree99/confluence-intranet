@@ -54,6 +54,24 @@ pageRoutes.get("/:id", async (req, res) => {
   }
 });
 
+// Get attachments for a specific page
+pageRoutes.get("/:id/attachments", async (req, res) => {
+  try {
+    const attachments = await dbService.getAttachmentsByPageId(req.params.id);
+    res.json({
+      success: true,
+      pageId: req.params.id,
+      count: attachments.length,
+      data: attachments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 // Search pages
 pageRoutes.get("/search/query", async (req, res) => {
   try {

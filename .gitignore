@@ -4,3 +4,17 @@ dist/
 .DS_Store
 *.log
 .vscode/
+check-files.ps1
+check-kemikalier.ps1
+create-png-script.ps1
+create-script.ps1
+retry-kemikalier.ps1
+retry-uploads.ps1
+upload-egenkontroll.ps1
+upload-ekonomi.ps1
+upload-files.ps1
+upload-inkop.ps1
+upload-kvalitet.ps1
+upload-marknad-policys.ps1
+upload-personal.ps1
+upload-png-files.ps1

@@ -39,8 +39,14 @@ adminRoutes.post("/sync", async (_req, res) => {
   try {
     logger.info("Starting manual sync from Confluence");
 
-    const pages = await confluenceService.getAllPages();
-    logger.info(`Fetched ${pages.length} pages from Confluence`);
+    const seedPages = await confluenceService.getAllPages();
+    logger.info(`Fetched ${seedPages.length} seed pages from Confluence`);
+
+    const expanded = await confluenceService.expandWithLinkedPages(seedPages);
+    const pages = expanded.allPages;
+    logger.info(
+      `Expanded to ${pages.length} pages total (${expanded.linkedAdded} linked docs added, ${expanded.referencesScanned} references scanned)`
+    );
 
     let synced = 0;
     let chunked = 0;

@@ -98,5 +98,26 @@ CREATE TABLE IF NOT EXISTS sync_logs (
 
 CREATE INDEX IF NOT EXISTS idx_sync_logs_created ON sync_logs(started_at);
 
+-- Create attachments table (files attached to Confluence pages)
+CREATE TABLE IF NOT EXISTS attachments (
+    id SERIAL PRIMARY KEY,
+    confluence_id VARCHAR(255) UNIQUE NOT NULL,
+    page_id INT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+    page_confluence_id VARCHAR(255) NOT NULL,
+    title VARCHAR(1000) NOT NULL,
+    file_name VARCHAR(1000),
+    media_type VARCHAR(255),
+    file_size BIGINT,
+    download_url VARCHAR(2000),
+    web_url VARCHAR(2000),
+    version INT,
+    last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_page_id ON attachments(page_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_page_confluence_id ON attachments(page_confluence_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_title ON attachments(title);
+
 -- Enable pgvector extension if using PostgreSQL with pgvector
 -- CREATE EXTENSION IF NOT EXISTS vector;

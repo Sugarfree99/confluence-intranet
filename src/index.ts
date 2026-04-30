@@ -52,6 +52,57 @@ app.get("/", (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
+/**
+ * Friendly document URL: /doc/:slug -> redirects to the original page URL
+ * stored in the DB (Confluence webui link). Slugs are derived from the page
+ * title by the same normalization used in the QA service.
+ */
+function slugifyTitle(title: string): string {
+  return (title || "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .substring(0, 120);
+}
+
+app.get("/doc/:slug", async (req, res) => {
+  try {
+    const slug = (req.params.slug || "").toLowerCase();
+    if (!slug) return res.status(404).send("Document not found");
+
+    const pages = await dbService.getPages(5000, 0);
+    const match = pages.find((p) => slugifyTitle(p.title) === slug);
+
+    if (!match) {
+      return res.status(404).send(`Document not found: ${slug}`);
+    }
+
+    if (match.url) {
+      const absolute = /^https?:\/\//i.test(match.url)
+        ? match.url
+        : `${process.env.CONFLUENCE_BASE_URL || ""}${match.url}`;
+      return res.redirect(302, absolute);
+    }
+
+    // No external URL stored — show a minimal landing with the title.
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(
+      `<!doctype html><meta charset="utf-8"><title>${match.title}</title>` +
+        `<h1>${match.title}</h1><p>Ingen extern länk finns för detta dokument.</p>` +
+        `<p><a href="/">Tillbaka</a></p>`
+    );
+  } catch (error) {
+    logger.error("Failed to resolve /doc/:slug", {
+      slug: req.params.slug,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).send("Internal error");
+  }
+});
+
 // Simple auth endpoint for testing
 app.post("/auth/login", (req, res) => {
   const { username, password } = req.body;
@@ -91,8 +142,14 @@ async function initializeSync() {
     logger.info("Running scheduled Confluence sync");
 
     try {
-      const pages = await confluenceService.getAllPages();
-      logger.info(`Fetched ${pages.length} pages from Confluence`);
+      const seedPages = await confluenceService.getAllPages();
+      logger.info(`Fetched ${seedPages.length} seed pages from Confluence`);
+
+      const expanded = await confluenceService.expandWithLinkedPages(seedPages);
+      const pages = expanded.allPages;
+      logger.info(
+        `Expanded to ${pages.length} pages total (${expanded.linkedAdded} linked docs added, ${expanded.referencesScanned} references scanned)`
+      );
 
       let synced = 0;
       let chunked = 0;

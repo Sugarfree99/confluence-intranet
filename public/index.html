@@ -579,6 +579,35 @@
           .replace(/'/g, "&#39;");
       }
 
+      // Render inline markdown: **bold** and [text](url) links.
+      // Input is plain text; output is HTML-safe with the limited markdown
+      // expanded into <strong> and <a> elements.
+      function renderInline(text) {
+        const linkRegex = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+        const parts = [];
+        let lastIndex = 0;
+        let match;
+        while ((match = linkRegex.exec(text)) !== null) {
+          if (match.index > lastIndex) {
+            parts.push(escapeHtml(text.substring(lastIndex, match.index)));
+          }
+          const label = escapeHtml(match[1]);
+          const rawUrl = match[2];
+          const safe = /^(https?:|\/)/i.test(rawUrl);
+          const href = safe ? escapeHtml(rawUrl) : "#";
+          const targetAttr = /^https?:/i.test(rawUrl)
+            ? ' target="_blank" rel="noopener noreferrer"'
+            : "";
+          parts.push(`<a href="${href}"${targetAttr}>${label}</a>`);
+          lastIndex = linkRegex.lastIndex;
+        }
+        if (lastIndex < text.length) {
+          parts.push(escapeHtml(text.substring(lastIndex)));
+        }
+        // Bold pass on already-built HTML (escaped text + safe anchors).
+        return parts.join("").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      }
+
       function formatResponseText(text) {
         const lines = String(text || "").split(/\r?\n/);
         const html = [];
@@ -598,7 +627,7 @@
             const items = [];
             while (i < lines.length && bulletRegex.test(lines[i].trim())) {
               const match = lines[i].trim().match(bulletRegex);
-              items.push(`<li>${escapeHtml(match[1])}</li>`);
+              items.push(`<li>${renderInline(match[1])}</li>`);
               i++;
             }
             html.push(`<ul>${items.join("")}</ul>`);
@@ -609,18 +638,18 @@
             const items = [];
             while (i < lines.length && numberRegex.test(lines[i].trim())) {
               const match = lines[i].trim().match(numberRegex);
-              items.push(`<li>${escapeHtml(match[1])}</li>`);
+              items.push(`<li>${renderInline(match[1])}</li>`);
               i++;
             }
             html.push(`<ol>${items.join("")}</ol>`);
             continue;
           }
 
-          html.push(`<p>${escapeHtml(line)}</p>`);
+          html.push(`<p>${renderInline(line)}</p>`);
           i++;
         }
 
-        return html.join("") || `<p>${escapeHtml(String(text || ""))}</p>`;
+        return html.join("") || `<p>${renderInline(String(text || ""))}</p>`;
       }
 
       function appendBubble(text, role = "bot", extras = null) {
