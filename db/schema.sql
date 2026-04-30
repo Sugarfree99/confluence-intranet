@@ -111,9 +111,13 @@ CREATE TABLE IF NOT EXISTS attachments (
     download_url VARCHAR(2000),
     web_url VARCHAR(2000),
     version INT,
+    file_data BYTEA,
     last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- For databases created before raw-bytes storage was added.
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS file_data BYTEA;
 
 CREATE INDEX IF NOT EXISTS idx_attachments_page_id ON attachments(page_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_page_confluence_id ON attachments(page_confluence_id);

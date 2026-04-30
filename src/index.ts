@@ -53,9 +53,13 @@ app.get("/", (_req, res) => {
 });
 
 /**
- * Friendly document URL: /doc/:slug -> redirects to the original page URL
- * stored in the DB (Confluence webui link). Slugs are derived from the page
- * title by the same normalization used in the QA service.
+ * Friendly document URL: /doc/:slug
+ *
+ * Renders the document inside our own app (using the configured baseUrl —
+ * we never redirect off-site). For regular Confluence pages we display the
+ * stored raw_html; for synthetic attachment-pages (confluence_id "att:...")
+ * we display the extracted plain text plus a link to fetch the original
+ * binary via the Confluence download URL.
  */
 function slugifyTitle(title: string): string {
   return (title || "")
@@ -68,6 +72,70 @@ function slugifyTitle(title: string): string {
     .substring(0, 120);
 }
 
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderDocPage(opts: {
+  title: string;
+  bodyHtml: string;
+  originalLink?: { href: string; label: string } | null;
+}): string {
+  const original = opts.originalLink
+    ? `<a class="btn" href="${escapeHtml(opts.originalLink.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(opts.originalLink.label)}</a>`
+    : "";
+  return `<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(opts.title)}</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f6f7f9; color: #1a1a1a; }
+  header { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #e3e5e8; padding: 12px 20px; display: flex; gap: 12px; align-items: center; }
+  header a.back { color: #555; text-decoration: none; font-size: 14px; }
+  header a.back:hover { color: #000; }
+  header h1 { font-size: 16px; margin: 0; flex: 1; }
+  .btn { display: inline-block; padding: 6px 12px; background: #2563eb; color: #fff; border-radius: 6px; text-decoration: none; font-size: 13px; }
+  .btn:hover { background: #1d4ed8; }
+  main { max-width: 920px; margin: 24px auto; padding: 24px 28px; background: #fff; border: 1px solid #e3e5e8; border-radius: 8px; }
+  main h1.doc-title { margin-top: 0; font-size: 24px; }
+  .doc-body { line-height: 1.6; }
+  .doc-body img { max-width: 100%; height: auto; }
+  .doc-body table { border-collapse: collapse; margin: 12px 0; }
+  .doc-body th, .doc-body td { border: 1px solid #e3e5e8; padding: 6px 10px; }
+  .doc-body pre { background: #f6f7f9; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0f1115; color: #e5e7eb; }
+    header, main { background: #181a20; border-color: #2a2d34; }
+    header a.back { color: #9ca3af; }
+    header h1 { color: #e5e7eb; }
+    .doc-body pre { background: #0f1115; }
+    .doc-body th, .doc-body td { border-color: #2a2d34; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <a class="back" href="/">← Tillbaka till chatten</a>
+    <h1>${escapeHtml(opts.title)}</h1>
+    ${original}
+  </header>
+  <main>
+    <h1 class="doc-title">${escapeHtml(opts.title)}</h1>
+    <article class="doc-body">${opts.bodyHtml}</article>
+  </main>
+</body>
+</html>`;
+}
+
 app.get("/doc/:slug", async (req, res) => {
   try {
     const slug = (req.params.slug || "").toLowerCase();
@@ -77,23 +145,86 @@ app.get("/doc/:slug", async (req, res) => {
     const match = pages.find((p) => slugifyTitle(p.title) === slug);
 
     if (!match) {
-      return res.status(404).send(`Document not found: ${slug}`);
+      res.status(404).setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(
+        renderDocPage({
+          title: "Dokumentet hittades inte",
+          bodyHtml: `<p>Slug: <code>${escapeHtml(slug)}</code></p>`,
+        })
+      );
     }
 
-    if (match.url) {
-      const absolute = /^https?:\/\//i.test(match.url)
-        ? match.url
-        : `${process.env.CONFLUENCE_BASE_URL || ""}${match.url}`;
-      return res.redirect(302, absolute);
+    const isAttachmentPage =
+      typeof match.confluence_id === "string" &&
+      match.confluence_id.startsWith("att:");
+
+    let bodyHtml = "";
+    let originalLink: { href: string; label: string } | null = null;
+
+    if (isAttachmentPage) {
+      // Synthetic attachment page: just present a download link. We no
+      // longer try to preview the file inline — clicking the link sends
+      // the raw bytes (with the original media type) to the browser,
+      // which then handles it like any other file download.
+      const attId = match.confluence_id.substring(4);
+      const attRow = await dbService.getAttachmentByConfluenceId(attId);
+      const hasBytes = !!attRow?.file_data;
+      const rawSrc = `/attachment/${encodeURIComponent(attId)}/raw`;
+      const fileName: string =
+        attRow?.file_name || attRow?.title || match.title || "fil";
+      const mediaType: string = attRow?.media_type || "okänd typ";
+      const sizeStr =
+        typeof attRow?.file_size === "number" || typeof attRow?.file_size === "string"
+          ? `${(Number(attRow.file_size) / 1024).toFixed(1)} kB`
+          : "okänd storlek";
+
+      let downloadHref = "";
+      if (hasBytes) {
+        downloadHref = `${rawSrc}?download=1`;
+      } else {
+        const dl = attRow?.download_url || attRow?.web_url || match.url || "";
+        if (dl) {
+          downloadHref = /^https?:\/\//i.test(dl)
+            ? dl
+            : `${process.env.CONFLUENCE_BASE_URL || ""}${dl}`;
+        }
+      }
+
+      bodyHtml = downloadHref
+        ? `<p>Filen <strong>${escapeHtml(fileName)}</strong> (${escapeHtml(mediaType)}, ${escapeHtml(sizeStr)}) kan laddas ner nedan.</p>
+           <p><a class="btn" href="${escapeHtml(downloadHref)}">Ladda ner ${escapeHtml(fileName)}</a></p>`
+        : `<p><em>Filen är inte tillgänglig för nedladdning.</em></p>`;
+
+      if (downloadHref) {
+        originalLink = { href: downloadHref, label: "Ladda ner" };
+      }
+    } else {
+      // Regular Confluence page: render stored HTML body.
+      bodyHtml =
+        match.raw_html && match.raw_html.trim().length > 0
+          ? match.raw_html
+          : `<p>${escapeHtml(match.content || "")}</p>`;
+
+      // List attachments that belong to this page so the user can drill in.
+      try {
+        const atts = await dbService.getAttachmentsByPageId(match.confluence_id);
+        if (atts.length > 0) {
+          const items = atts
+            .map((a: any) => {
+              const attTitle = `${match.title} – ${a.title}`;
+              const attSlug = slugifyTitle(attTitle);
+              return `<li><a href="/doc/${encodeURIComponent(attSlug)}">${escapeHtml(a.title)}</a></li>`;
+            })
+            .join("");
+          bodyHtml += `<hr><h2>Bilagor</h2><ul>${items}</ul>`;
+        }
+      } catch {
+        // Non-fatal: just skip the attachment list.
+      }
     }
 
-    // No external URL stored — show a minimal landing with the title.
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(
-      `<!doctype html><meta charset="utf-8"><title>${match.title}</title>` +
-        `<h1>${match.title}</h1><p>Ingen extern länk finns för detta dokument.</p>` +
-        `<p><a href="/">Tillbaka</a></p>`
-    );
+    res.send(renderDocPage({ title: match.title, bodyHtml, originalLink }));
   } catch (error) {
     logger.error("Failed to resolve /doc/:slug", {
       slug: req.params.slug,
@@ -103,7 +234,60 @@ app.get("/doc/:slug", async (req, res) => {
   }
 });
 
-// Simple auth endpoint for testing
+/**
+ * Stream the raw bytes of an attachment back to the browser using its
+ * original media type, so images/PDFs/audio/video can be previewed inline.
+ * Append `?download=1` to force a Save As dialog.
+ */
+app.get("/attachment/:id/raw", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const file = await dbService.getAttachmentFile(id);
+
+    if (!file) {
+      // No raw bytes stored — fall back to the Confluence download URL
+      // so the user still gets the file.
+      const meta = await dbService.getAttachmentByConfluenceId(id);
+      const dl = meta?.download_url || meta?.web_url;
+      if (dl) {
+        const absolute = /^https?:\/\//i.test(dl)
+          ? dl
+          : `${(process.env.CONFLUENCE_BASE_URL || "").replace(/\/$/, "")}${dl}`;
+        return res.redirect(302, absolute);
+      }
+      return res.status(404).send("Attachment not found");
+    }
+
+    const mediaType = file.media_type || "application/octet-stream";
+    const fileName = file.file_name || file.title || "file";
+    // Always send as attachment so the browser triggers a download dialog.
+    // (Previously we used `inline` unless ?download=1 was set; that caused
+    // browsers to navigate to the URL and try to render the bytes instead
+    // of saving them, so links from chat sources felt "broken".)
+    const disposition = "attachment";
+
+    // RFC 5987 encoding lets us send Unicode file names safely.
+    const asciiName = fileName.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "");
+    const utf8Name = encodeURIComponent(fileName);
+
+    res.setHeader("Content-Type", mediaType);
+    res.setHeader(
+      "Content-Disposition",
+      `${disposition}; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`
+    );
+    res.setHeader("Content-Length", String(file.data.length));
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.end(file.data);
+  } catch (error) {
+    logger.error("Failed to stream attachment", {
+      id: req.params.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).send("Internal error");
+  }
+});
+
+
 app.post("/auth/login", (req, res) => {
   const { username, password } = req.body;
   

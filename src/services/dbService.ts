@@ -260,6 +260,49 @@ export class DatabaseService {
     return result.rows;
   }
 
+  async getAttachmentByConfluenceId(confluenceId: string): Promise<any | null> {
+    const r = await this.pool.query(
+      "SELECT * FROM attachments WHERE confluence_id = $1",
+      [confluenceId]
+    );
+    return r.rows[0] || null;
+  }
+
+  /**
+   * Store the raw bytes of an attachment so they can later be served back
+   * to the user in the file's original format (image, PDF, etc.).
+   * Called separately from `saveAttachment` so metadata can be upserted
+   * even when the binary download fails.
+   */
+  async saveAttachmentFile(confluenceId: string, data: Buffer): Promise<void> {
+    await this.pool.query(
+      "UPDATE attachments SET file_data = $2 WHERE confluence_id = $1",
+      [confluenceId, data]
+    );
+  }
+
+  /**
+   * Fetch the raw bytes + media type for streaming back to the browser.
+   */
+  async getAttachmentFile(
+    confluenceId: string
+  ): Promise<{ data: Buffer; media_type: string | null; file_name: string | null; title: string } | null> {
+    const r = await this.pool.query(
+      `SELECT file_data, media_type, file_name, title
+         FROM attachments
+        WHERE confluence_id = $1`,
+      [confluenceId]
+    );
+    const row = r.rows[0];
+    if (!row || !row.file_data) return null;
+    return {
+      data: row.file_data as Buffer,
+      media_type: row.media_type,
+      file_name: row.file_name,
+      title: row.title,
+    };
+  }
+
   async deleteAttachmentsForPage(pageConfluenceId: string, keepIds: string[]): Promise<number> {
     if (keepIds.length === 0) {
       const r = await this.pool.query(

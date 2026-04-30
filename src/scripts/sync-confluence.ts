@@ -166,6 +166,29 @@ async function sync() {
               web_url: att._links?.webui || null,
               version: att.version?.number || null,
             });
+
+            // Persist the raw bytes so we can serve the file back in its
+            // original format from `/attachment/:id/raw`. Skip oversize
+            // files to avoid exploding the database.
+            const downloadPath: string | null = att._links?.download || null;
+            const declaredSize: number =
+              typeof ext.fileSize === "number" ? ext.fileSize : 0;
+            const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+            if (downloadPath && declaredSize <= MAX_BYTES) {
+              try {
+                const buf = await downloadAttachment(downloadPath);
+                if (buf.length <= MAX_BYTES) {
+                  await dbService.saveAttachmentFile(att.id, buf);
+                }
+              } catch (dlErr) {
+                logger.warn("Failed to store attachment bytes", {
+                  attachmentId: att.id,
+                  fileName: ext.fileName || att.title,
+                  error: dlErr instanceof Error ? dlErr.message : String(dlErr),
+                });
+              }
+            }
+
             keepIds.push(att.id);
             attachmentsSynced++;
           }

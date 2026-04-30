@@ -45,6 +45,7 @@ interface ChunkCandidate {
   space_key: string;
   content: string;
   score: number;
+  confluence_id: string;
 }
 
 /**
@@ -197,6 +198,7 @@ export class QAService {
                   p.title,
                   p.url,
                   p.space_key,
+                  p.confluence_id,
                   1 - (e.embedding <=> $1::halfvec) AS score
              FROM embeddings e
              JOIN chunks c ON c.id = e.chunk_id
@@ -226,6 +228,7 @@ export class QAService {
                   p.title,
                   p.url,
                   p.space_key,
+                  p.confluence_id,
                   ts_rank_cd(
                     to_tsvector('simple', coalesce(c.content, '')),
                     to_tsquery('simple', $1)
@@ -276,6 +279,7 @@ export class QAService {
       space_key: row.space_key || "",
       content: row.content || "",
       score,
+      confluence_id: row.confluence_id || "",
     }));
   }
 
@@ -463,9 +467,13 @@ Fristående fråga:`;
   /**
    * Build the markdown source-link footer that gets appended to the answer.
    * One link per unique source page, max 3, in score order.
+   *
+   * Attachment sources (synthetic pages with confluence_id "att:<id>") link
+   * directly to the raw download endpoint so the user gets the file in its
+   * original format. Regular Confluence pages link to the in-app viewer.
    */
   private buildSourceFooter(
-    sources: Array<{ title: string; url?: string; pageId: number }>
+    sources: Array<{ title: string; url?: string; pageId: number; confluenceId?: string }>
   ): string {
     if (!sources || sources.length === 0) return "";
     const seen = new Set<number>();
@@ -474,9 +482,16 @@ Fristående fråga:`;
       if (seen.has(s.pageId)) continue;
       seen.add(s.pageId);
       const title = s.title || "Dokument";
-      const slug = this.slugify(title);
-      if (!slug) continue;
-      lines.push(`- [${title}](/doc/${slug})`);
+      let href: string;
+      if (s.confluenceId && s.confluenceId.startsWith("att:")) {
+        const attId = s.confluenceId.substring(4);
+        href = `/attachment/${encodeURIComponent(attId)}/raw?download=1`;
+      } else {
+        const slug = this.slugify(title);
+        if (!slug) continue;
+        href = `/doc/${slug}`;
+      }
+      lines.push(`- [${title}](${href})`);
       if (lines.length >= 3) break;
     }
     if (lines.length === 0) return "";
@@ -487,11 +502,12 @@ Fristående fråga:`;
     question: string,
     chunks: ChunkCandidate[],
     history: ChatTurn[] = []
-  ): Promise<{ answer: string; confidence: number }> {
+  ): Promise<{ answer: string; confidence: number; grounded: boolean }> {
     if (chunks.length === 0) {
       return {
-        answer: "Jag kunde inte hitta relevant information för din fråga.",
+        answer: this.pick(this.NO_ANSWER_VARIANTS),
         confidence: 0,
+        grounded: false,
       };
     }
 
@@ -500,6 +516,7 @@ Fristående fråga:`;
       return {
         answer: `Baserat på dokumentationen: ${context.substring(0, 400)}...`,
         confidence: 0.4,
+        grounded: true,
       };
     }
 
@@ -512,31 +529,50 @@ Fristående fråga:`;
       ? `Tidigare konversation (för att förstå följdfrågor):\n${historyBlock}\n\n`
       : "";
 
-    const prompt = `Du är en assistent som svarar på frågor om företagets interna dokumentation. Använd ENBART informationen i kontexten nedan. Om svaret inte finns där, säg det rakt ut.
+    const prompt = `Du är en hjälpsam, vänlig assistent för Nordrests medarbetare. Du svarar bara utifrån informationen nedan – på ett naturligt och mänskligt sätt, som en kollega som faktiskt har läst dokumenten.
 
-Svara på svenska, kort och konkret. Inkludera INTE några källhänvisningar, fotnoter eller referenser som [1], [2] osv. i ditt svar.
+Du MASTE returnera giltig JSON med exakt detta format:
+{
+  "grounded": boolean,   // true om du faktiskt kunde besvara frågan utifrån underlaget; false om svaret inte fanns där
+  "answer": string       // själva svaret på svenska
+}
+
+Riktlinjer för fältet "answer":
+- Svara på svenska, kort och konkret. Inga formella floskler.
+- Variera gärna meningsbyggnad och inledningsord.
+- Använd ALDRIG fraser som "i kontexten", "i tillhandahållna dokumenten", "enligt informationen", "baserat på materialet".
+- Om underlaget inte täcker frågan: sätt grounded=false och skriv en kort, varm och varierad ursaktning (t.ex. "Det där hittar jag inget om – vet du var det skulle stå?", "Hmm, jag har inget om det", "Jag kommer inte åt det här just nu"). Hitta INTE på.
+- Inkludera INTE källhänvisningar som [1], [2] i "answer".
 
 ${historySection}Fråga: ${question}
 
-Kontext:
-${context}
-
-Svar:`;
+Underlag:
+${context}`;
 
     try {
-      const answer = await this.llm.generate(prompt, { temperature: 0.2 });
-      const topScore = chunks[0]?.score ?? 0.5;
-      const clean = answer
+      const raw = await this.llm.generate(prompt, {
+        temperature: 0.5,
+        responseMimeType: "application/json",
+      });
+      const parsed = this.parseLLMJson(raw);
+      const grounded = parsed.grounded === true;
+      const answer = String(parsed.answer || "")
         .replace(/\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\]/g, "")
         .trim();
-      return { answer: clean, confidence: Math.min(1, topScore) };
+      const topScore = chunks[0]?.score ?? 0.5;
+      return {
+        answer: answer || this.pick(this.NO_ANSWER_VARIANTS),
+        confidence: grounded ? Math.min(1, topScore) : 0,
+        grounded,
+      };
     } catch (error) {
       logger.error("Answer generation (chunks) failed", {
         error: error instanceof Error ? error.message : String(error),
       });
       return {
-        answer: "Ett fel inträffade när jag försökte besvara din fråga.",
+        answer: this.pick(this.ERROR_VARIANTS),
         confidence: 0,
+        grounded: false,
       };
     }
   }
@@ -545,11 +581,12 @@ Svar:`;
     question: string,
     pages: PageCandidate[],
     history: ChatTurn[] = []
-  ): Promise<{ answer: string; confidence: number }> {
+  ): Promise<{ answer: string; confidence: number; grounded: boolean }> {
     if (pages.length === 0) {
       return {
-        answer: "Jag kunde inte hitta relevant information för din fråga.",
+        answer: this.pick(this.NO_ANSWER_VARIANTS),
         confidence: 0,
+        grounded: false,
       };
     }
 
@@ -558,6 +595,7 @@ Svar:`;
       return {
         answer: `Baserat på dokumentationen: ${context.substring(0, 400)}...`,
         confidence: 0.4,
+        grounded: true,
       };
     }
 
@@ -570,34 +608,101 @@ Svar:`;
       ? `Tidigare konversation (för att förstå följdfrågor):\n${historyBlock}\n\n`
       : "";
 
-    const prompt = `Du är en assistent som svarar på frågor om företagets interna dokumentation. Använd ENBART informationen i kontexten nedan. Om svaret inte finns där, säg det rakt ut.
+    const prompt = `Du är en hjälpsam, vänlig assistent för Nordrests medarbetare. Du svarar bara utifrån informationen nedan – på ett naturligt och mänskligt sätt, som en kollega som faktiskt har läst dokumenten.
 
-Svara på svenska, kort och konkret. Inkludera INTE några källhänvisningar, fotnoter eller referenser som [1], [2] osv. i ditt svar.
+Du MASTE returnera giltig JSON med exakt detta format:
+{
+  "grounded": boolean,   // true om du faktiskt kunde besvara frågan utifrån underlaget; false om svaret inte fanns där
+  "answer": string       // själva svaret på svenska
+}
+
+Riktlinjer för fältet "answer":
+- Svara på svenska, kort och konkret. Inga formella floskler.
+- Variera gärna meningsbyggnad och inledningsord.
+- Använd ALDRIG fraser som "i kontexten", "i tillhandahållna dokumenten", "enligt informationen", "baserat på materialet".
+- Om underlaget inte täcker frågan: sätt grounded=false och skriv en kort, varm och varierad ursaktning. Hitta INTE på.
+- Inkludera INTE källhänvisningar som [1], [2] i "answer".
 
 ${historySection}Fråga: ${question}
 
-Kontext:
-${context}
-
-Svar:`;
+Underlag:
+${context}`;
 
     try {
-      const answer = await this.llm.generate(prompt, { temperature: 0.2 });
-      const topScore = pages[0]?.score ?? 0.5;
-      // Defensive scrub: remove any leftover [1], [2], [1, 2] style citations.
-      const clean = answer
+      const raw = await this.llm.generate(prompt, {
+        temperature: 0.5,
+        responseMimeType: "application/json",
+      });
+      const parsed = this.parseLLMJson(raw);
+      const grounded = parsed.grounded === true;
+      const answer = String(parsed.answer || "")
         .replace(/\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\]/g, "")
         .trim();
-      return { answer: clean, confidence: Math.min(1, topScore) };
+      const topScore = pages[0]?.score ?? 0.5;
+      return {
+        answer: answer || this.pick(this.NO_ANSWER_VARIANTS),
+        confidence: grounded ? Math.min(1, topScore) : 0,
+        grounded,
+      };
     } catch (error) {
       logger.error("Answer generation failed", {
         error: error instanceof Error ? error.message : String(error),
       });
       return {
-        answer: "Ett fel inträffade när jag försökte besvara din fråga.",
+        answer: this.pick(this.ERROR_VARIANTS),
         confidence: 0,
+        grounded: false,
       };
     }
+  }
+
+  /**
+   * Pools of fallback messages so the bot doesn't repeat the same line every
+   * time it can't find an answer or hits an error. We pick uniformly at
+   * random; for two consecutive misses the user gets a different phrasing.
+   */
+  private readonly NO_ANSWER_VARIANTS = [
+    "Det där hittar jag inget om – vet du var det skulle stå?",
+    "Hmm, jag hittar inget om det i våra dokument. Vill du formulera om frågan?",
+    "Jag har inget på det just nu. Försök gärna med en annan formulering, eller berätta mer vad du letar efter.",
+    "Tyvärr, det fanns inget om det här. Kanske finns det under ett annat namn?",
+    "Jag kommer inte åt något om det. Vill du prova med andra ord eller smalna av frågan?",
+    "Det där har jag inte stött på. Kan du beskriva det lite annorlunda så letar jag igen?",
+  ];
+
+  private readonly ERROR_VARIANTS = [
+    "Hoppsan, något gick fel när jag skulle svara. Prova gärna igen om en stund.",
+    "Det blev krångel min sida – kan du försöka igen om någon minut?",
+    "Något strulade när jag letade. Vill du försöka igen?",
+  ];
+
+  private pick<T>(arr: readonly T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  /**
+   * Parse a JSON object from the LLM's response. Tolerant of leading/trailing
+   * whitespace and ```json ``` code fences. Returns {} on any failure so the
+   * caller falls through to the default "not grounded" branch.
+   */
+  private parseLLMJson(raw: string): { grounded?: boolean; answer?: string } {
+    if (!raw) return {};
+    let s = raw.trim();
+    // Strip a leading ```json or ``` fence if present.
+    s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+    // Pull out the outermost {...} in case the model wrapped extra text.
+    const first = s.indexOf("{");
+    const last = s.lastIndexOf("}");
+    if (first !== -1 && last !== -1 && last > first) {
+      s = s.substring(first, last + 1);
+    }
+    try {
+      const obj = JSON.parse(s);
+      if (obj && typeof obj === "object") return obj;
+    } catch {
+      // fall through
+    }
+    return {};
   }
 
   async answerQuestion(question: string, history: ChatTurn[] = []): Promise<QAResult> {
@@ -612,11 +717,18 @@ Svar:`;
     const chunks = await this.searchRelevantChunks(searchQuery);
 
     if (chunks.length > 0) {
-      const { answer, confidence } = await this.generateAnswerFromChunks(
+      const { answer, confidence, grounded } = await this.generateAnswerFromChunks(
         question,
         chunks,
         history
       );
+
+      // The LLM tells us via the structured `grounded` flag whether it
+      // actually used the chunks. If not, drop sources entirely so we
+      // don't show a "Källor:" footer for documents that didn't help.
+      if (!grounded) {
+        return { answer, sources: [], confidence: 0 };
+      }
 
       // De-duplicate sources by page_id, keeping the best-scoring chunk.
       const sourceMap = new Map<number, ChunkCandidate>();
@@ -631,6 +743,7 @@ Svar:`;
         pageId: c.page_id,
         title: c.title,
         url: c.url,
+        confluenceId: c.confluence_id,
         excerpt: c.content.substring(0, 200) + (c.content.length > 200 ? "..." : ""),
         relevance: c.score,
       }));
@@ -645,14 +758,21 @@ Svar:`;
 
     if (pages.length === 0) {
       return {
-        answer:
-          "Jag kunde inte hitta relevant information för din fråga. Prova en annan formulering.",
+        answer: this.pick(this.NO_ANSWER_VARIANTS),
         sources: [],
         confidence: 0,
       };
     }
 
-    const { answer, confidence } = await this.generateAnswer(question, pages, history);
+    const { answer, confidence, grounded } = await this.generateAnswer(
+      question,
+      pages,
+      history
+    );
+
+    if (!grounded) {
+      return { answer, sources: [], confidence: 0 };
+    }
 
     const sources = pages.map((p) => ({
       pageId: p.page_id,
