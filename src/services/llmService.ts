@@ -17,7 +17,7 @@ export class LLMService {
 
   constructor(apiKey?: string, model?: string) {
     this.apiKey = apiKey || process.env.GEMINI_API_KEY || "";
-    this.model = model || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    this.model = model || process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
   }
 
   isConfigured(): boolean {
@@ -63,7 +63,8 @@ export class LLMService {
     }
 
     const modelsToTry = [this.model, ...this.fallbackModels().filter((m) => m !== this.model)];
-    const maxAttemptsPerModel = 4;
+    const maxAttemptsPerModel = parseInt(process.env.GEMINI_MAX_ATTEMPTS_PER_MODEL || "4", 10);
+    const max503Attempts = parseInt(process.env.GEMINI_MAX_503_ATTEMPTS_PER_MODEL || "2", 10);
     let lastError: any;
 
     for (const model of modelsToTry) {
@@ -84,6 +85,14 @@ export class LLMService {
           if (!transient) {
             // Hard error (4xx other than 429): no point retrying or falling back.
             throw error;
+          }
+          // 503 means model overload; move to the next model quickly.
+          if (status === 503 && attempt >= max503Attempts) {
+            logger.warn(`LLM repeated 503 on ${model}, switching to next fallback`, {
+              attempt,
+              model,
+            });
+            break;
           }
           if (attempt === maxAttemptsPerModel) break; // try next model
           // Exponential backoff with jitter: 1s, 2s, 4s, 8s.

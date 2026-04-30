@@ -29,12 +29,25 @@ npm install
 2. Skapa Confluence API-token: https://id.atlassian.com/manage-profile/security/api-tokens
 3. Fyll i `.env` med dina Confluence-uppgifter
 
-### Sätt upp databasen
+### Sätt upp databasen (Docker)
+
+Databasen körs i Docker. Se till att inga andra Postgres-instanser
+lyssnar på port 5432 (stoppa lokal Postgres-tjänst om den finns).
 
 ```bash
-createdb confluence_mirror
+npm run db:up        # startar Postgres-containern (auto-applicerar schema + migrations vid första körning)
 npm run build
-npm run sync
+npm run sync         # fyller databasen från Confluence
+```
+
+Användbara DB-kommandon:
+
+```bash
+npm run db:logs      # följ container-loggar
+npm run db:psql      # öppna psql i containern
+npm run db:migrate   # kör om migrations mot existerande DB
+npm run db:down      # stoppa containern (data behålls)
+npm run db:reset     # WIPE: stoppa + radera volym + starta om (data försvinner)
 ```
 
 ### Starta servern

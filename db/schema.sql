@@ -8,8 +8,14 @@ CREATE TABLE IF NOT EXISTS pages (
     url VARCHAR(1000),
     raw_html TEXT,
     last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    embedding float8[],
+    embedding_updated_at TIMESTAMP
 );
+
+-- Make sure existing tables get the embedding columns too.
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS embedding float8[];
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS embedding_updated_at TIMESTAMP;
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_pages_confluence_id ON pages(confluence_id);

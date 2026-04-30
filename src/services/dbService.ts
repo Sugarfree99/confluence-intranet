@@ -55,7 +55,7 @@ export class DatabaseService {
     }
   }
 
-  async savePage(page: Partial<Page>): Promise<void> {
+  async savePage(page: Partial<Page>): Promise<number> {
     const query = `
       INSERT INTO pages (confluence_id, title, content, space_key, url, last_synced, raw_html)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -66,9 +66,10 @@ export class DatabaseService {
         url = $5,
         last_synced = $6,
         raw_html = $7
+      RETURNING id
     `;
 
-    await this.pool.query(query, [
+    const result = await this.pool.query(query, [
       page.confluence_id,
       page.title,
       page.content,
@@ -77,6 +78,7 @@ export class DatabaseService {
       page.last_synced || new Date(),
       page.raw_html,
     ]);
+    return result.rows[0].id as number;
   }
 
   async getPages(limit = 50, offset = 0): Promise<Page[]> {
@@ -115,6 +117,91 @@ export class DatabaseService {
       total: parseInt(result.rows[0].total),
       lastSync: result.rows[0].last_sync,
     };
+  }
+
+  /** Save (or update) a page's embedding by confluence_id. */
+  async savePageEmbedding(confluenceId: string, embedding: number[]): Promise<void> {
+    await this.pool.query(
+      `UPDATE pages
+          SET embedding = $1,
+              embedding_updated_at = NOW()
+        WHERE confluence_id = $2`,
+      [embedding, confluenceId]
+    );
+  }
+
+  /**
+   * Replace the chunks for a page atomically and return the inserted rows.
+   * Old chunks (and their embeddings, via ON DELETE CASCADE) are removed first.
+   */
+  async replacePageChunks(
+    pageId: number,
+    confluenceId: string,
+    chunks: Array<{
+      content: string;
+      type: string;
+      characterCount: number;
+      tokenCount: number;
+      startPosition: number;
+      metadata: any;
+    }>
+  ): Promise<Array<{ id: number; chunk_index: number; content: string }>> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM chunks WHERE page_id = $1", [pageId]);
+
+      const inserted: Array<{ id: number; chunk_index: number; content: string }> = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const c = chunks[i];
+        const r = await client.query(
+          `INSERT INTO chunks
+             (page_id, confluence_id, chunk_index, content, chunk_type,
+              character_count, token_count, start_position, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING id, chunk_index, content`,
+          [
+            pageId,
+            confluenceId,
+            i,
+            c.content,
+            c.type,
+            c.characterCount,
+            c.tokenCount,
+            c.startPosition,
+            c.metadata ? JSON.stringify(c.metadata) : null,
+          ]
+        );
+        inserted.push(r.rows[0]);
+      }
+
+      await client.query("COMMIT");
+      return inserted;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Upsert one embedding row per chunk. Stored as pgvector halfvec(3072). */
+  async saveChunkEmbedding(
+    chunkId: number,
+    embedding: number[],
+    model: string
+  ): Promise<void> {
+    // pgvector accepts the text form `[v1,v2,...]` and casts to halfvec.
+    const vec = "[" + embedding.join(",") + "]";
+    await this.pool.query(
+      `INSERT INTO embeddings (chunk_id, embedding, model)
+       VALUES ($1, $2::halfvec, $3)
+       ON CONFLICT (chunk_id) DO UPDATE SET
+         embedding = EXCLUDED.embedding,
+         model = EXCLUDED.model,
+         created_at = NOW()`,
+      [chunkId, vec, model]
+    );
   }
 
   async close(): Promise<void> {

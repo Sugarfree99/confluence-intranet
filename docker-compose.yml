@@ -1,19 +1,28 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:15-alpine
+    # pgvector/pgvector:pg15 = official Postgres 15 + pgvector extension.
+    # Data files are binary-compatible with postgres:15-alpine, so existing
+    # volumes keep working after the image swap.
+    image: pgvector/pgvector:pg15
     container_name: confluence_mirror_db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: confluence_mirror
-      POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Auto-applied on FIRST init only (when the volume is empty).
+      # Run in alphabetical order: schema first, then migrations.
+      # To re-run after edits: `npm run db:reset` (drops the volume).
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+      - ./db/migrations/001_postgres_search.sql:/docker-entrypoint-initdb.d/01-postgres-search.sql:ro
+      - ./db/migrations/002_pgvector.sql:/docker-entrypoint-initdb.d/02-pgvector.sql:ro
+      - ./db/migrations/003_halfvec.sql:/docker-entrypoint-initdb.d/03-halfvec.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d confluence_mirror"]
       interval: 10s
       timeout: 5s
       retries: 5

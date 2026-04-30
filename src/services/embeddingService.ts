@@ -20,6 +20,7 @@ export interface EmbeddingResponse {
 export class EmbeddingService {
   private apiKey: string;
   private model: string;
+  private allowDummyOnError: boolean;
 
   constructor(apiKey?: string, model?: string) {
     this.apiKey = apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || "";
@@ -30,6 +31,7 @@ export class EmbeddingService {
       process.env.GEMINI_EMBEDDING_MODEL ||
       process.env.OPENAI_EMBEDDING_MODEL ||
       "gemini-embedding-001";
+    this.allowDummyOnError = process.env.ALLOW_DUMMY_EMBEDDINGS === "true";
   }
 
   private isGeminiKey(): boolean {
@@ -76,10 +78,22 @@ export class EmbeddingService {
       );
       return response.data.data[0].embedding;
     } catch (error) {
+      const err = error as any;
       logger.error("Failed to generate embedding", {
         error: error instanceof Error ? error.message : String(error),
+        status: err?.response?.status,
+        data: err?.response?.data,
+        model: this.model,
       });
-      return this.generateDummyEmbedding(text);
+
+      if (this.allowDummyOnError) {
+        logger.warn("Falling back to dummy embedding because ALLOW_DUMMY_EMBEDDINGS=true", {
+          model: this.model,
+        });
+        return this.generateDummyEmbedding(text);
+      }
+
+      throw error;
     }
   }
 
@@ -123,10 +137,22 @@ export class EmbeddingService {
         .sort((a: any, b: any) => a.index - b.index)
         .map((item: any) => item.embedding);
     } catch (error) {
+      const err = error as any;
       logger.error("Failed to generate batch embeddings", {
         error: error instanceof Error ? error.message : String(error),
+        status: err?.response?.status,
+        data: err?.response?.data,
+        model: this.model,
       });
-      return texts.map((text) => this.generateDummyEmbedding(text));
+
+      if (this.allowDummyOnError) {
+        logger.warn("Falling back to dummy batch embeddings because ALLOW_DUMMY_EMBEDDINGS=true", {
+          model: this.model,
+        });
+        return texts.map((text) => this.generateDummyEmbedding(text));
+      }
+
+      throw error;
     }
   }
 

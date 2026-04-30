@@ -9,7 +9,7 @@ export const qaRoutes = express.Router();
  */
 qaRoutes.post("/ask", optionalAuth, async (req: AuthRequest, res) => {
   try {
-    const { question } = req.body;
+    const { question, history } = req.body;
 
     if (!question || typeof question !== "string") {
       return res.status(400).json({
@@ -18,7 +18,7 @@ qaRoutes.post("/ask", optionalAuth, async (req: AuthRequest, res) => {
       });
     }
 
-    const result = await qaService.answerQuestion(question);
+    const result = await qaService.answerQuestion(question, Array.isArray(history) ? history : []);
 
     res.json({
       success: true,
@@ -46,13 +46,13 @@ qaRoutes.get("/search", optionalAuth, async (req: AuthRequest, res) => {
       });
     }
 
-    const chunks = await qaService.searchRelevantChunks(q, 10);
+    const pages = await qaService.searchRelevantPages(q, 10);
 
     res.json({
       success: true,
       query: q,
-      results: chunks,
-      count: chunks.length,
+      results: pages,
+      count: pages.length,
     });
   } catch (error) {
     res.status(500).json({

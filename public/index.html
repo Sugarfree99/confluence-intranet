@@ -41,9 +41,10 @@
       }
 
       .chat-header {
-        position: sticky;
+        position: fixed;
         top: 0;
-        z-index: 10;
+        left: 0;
+        z-index: 30;
         width: 100%;
         padding: 10px 0;
         border-bottom: 1px solid transparent;
@@ -77,17 +78,42 @@
         flex-shrink: 0;
       }
 
+      .page-content {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .page-content .hero-unit {
+        background-color: #eee;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+
+      .page-content .hero-unit.home-hero {
+        width: 100%;
+        height: 500px;
+        background: #111;
+        background-image: url("/background.jpg");
+      }
+
       .menu-btn {
         border: 0;
         background: transparent;
-        color: #1d6e4e;
+        color: #ffffff;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 46px;
+        gap: 12px;
+        padding: 0 6px;
         height: 46px;
         border-radius: 10px;
         cursor: pointer;
+        font-family: inherit;
+        font-size: 18px;
+        line-height: 1;
       }
 
       .menu-btn:hover {
@@ -95,7 +121,7 @@
       }
 
       .chat-header.scrolled .menu-btn {
-        color: #1d6e4e;
+        color: #ffffff;
       }
 
       .menu-icon {
@@ -112,10 +138,18 @@
         background: currentColor;
       }
 
+      .menu-label {
+        font-size: 0.95em;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+      }
+
       .chat-shell {
         width: min(980px, 100%);
         height: min(780px, calc(100vh - 110px));
         margin-top: 0;
+        margin-left: auto;
+        margin-right: auto;
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 24px;
@@ -131,6 +165,7 @@
         width: 100%;
         max-width: 1300px;
         padding: 50px 20px;
+        margin: 0 auto;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -231,6 +266,24 @@
         background: var(--bot);
         border: 1px solid #d8e3ff;
         border-bottom-left-radius: 6px;
+      }
+
+      .bubble.bot p {
+        margin: 0 0 10px;
+      }
+
+      .bubble.bot p:last-child {
+        margin-bottom: 0;
+      }
+
+      .bubble.bot ul,
+      .bubble.bot ol {
+        margin: 0 0 10px;
+        padding-left: 22px;
+      }
+
+      .bubble.bot li {
+        margin: 4px 0;
       }
 
       .meta {
@@ -394,13 +447,19 @@
           padding: 8px 0;
         }
 
+        .page-content .hero-unit.home-hero {
+          height: 260px;
+        }
+
         .chat-header .logo {
           height: 44px;
         }
 
         .menu-btn {
-          width: 40px;
+          gap: 10px;
+          padding: 0 4px;
           height: 40px;
+          font-size: 16px;
         }
 
         .site-footer .footer-logo {
@@ -419,6 +478,12 @@
           max-width: 94%;
         }
       }
+
+      @media only screen and (min-width: 961px) and (max-width: 1439px) {
+        .page-content .hero-unit.home-hero {
+          height: 400px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -431,32 +496,37 @@
             <span></span>
             <span></span>
           </span>
+          <span class="menu-label">MENY</span>
         </button>
       </div>
     </header>
 
-    <div class="content-block">
-      <main class="chat-shell">
-        <section id="chatLog" class="chat-log" aria-live="polite">
-          <article class="bubble bot">
-            Ask anything about your synced Confluence content. I will answer and list supporting sources.
-          </article>
-        </section>
+    <div class="page-content">
+      <section class="hero-unit home-hero" aria-hidden="true"></section>
 
-        <footer class="composer">
-          <form id="chatForm" class="composer-form">
-            <input
-              id="questionInput"
-              class="composer-input"
-              type="text"
-              placeholder="Ask a question..."
-              autocomplete="off"
-              required
-            />
-            <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
-          </form>
-        </footer>
-      </main>
+      <div class="content-block">
+        <main class="chat-shell">
+          <section id="chatLog" class="chat-log" aria-live="polite">
+            <article class="bubble bot">
+              Ställ en fråga om företagets interna dokument. Jag söker igenom relevanta medarbetardokument med RAG och ger dig ett kort, tydligt svar.
+            </article>
+          </section>
+
+          <footer class="composer">
+            <form id="chatForm" class="composer-form">
+              <input
+                id="questionInput"
+                class="composer-input"
+                type="text"
+                placeholder="Ställ en fråga om företagets dokument..."
+                autocomplete="off"
+                required
+              />
+              <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
+            </form>
+          </footer>
+        </main>
+      </div>
     </div>
 
     <footer class="site-footer" aria-label="Site footer">
@@ -500,10 +570,67 @@
       window.addEventListener("scroll", updateHeaderState, { passive: true });
       updateHeaderState();
 
+      function escapeHtml(value) {
+        return value
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function formatResponseText(text) {
+        const lines = String(text || "").split(/\r?\n/);
+        const html = [];
+        let i = 0;
+
+        const bulletRegex = /^\s*[-*•]\s+(.+)$/;
+        const numberRegex = /^\s*\d+[.)]\s+(.+)$/;
+
+        while (i < lines.length) {
+          const line = lines[i].trim();
+          if (!line) {
+            i++;
+            continue;
+          }
+
+          if (bulletRegex.test(line)) {
+            const items = [];
+            while (i < lines.length && bulletRegex.test(lines[i].trim())) {
+              const match = lines[i].trim().match(bulletRegex);
+              items.push(`<li>${escapeHtml(match[1])}</li>`);
+              i++;
+            }
+            html.push(`<ul>${items.join("")}</ul>`);
+            continue;
+          }
+
+          if (numberRegex.test(line)) {
+            const items = [];
+            while (i < lines.length && numberRegex.test(lines[i].trim())) {
+              const match = lines[i].trim().match(numberRegex);
+              items.push(`<li>${escapeHtml(match[1])}</li>`);
+              i++;
+            }
+            html.push(`<ol>${items.join("")}</ol>`);
+            continue;
+          }
+
+          html.push(`<p>${escapeHtml(line)}</p>`);
+          i++;
+        }
+
+        return html.join("") || `<p>${escapeHtml(String(text || ""))}</p>`;
+      }
+
       function appendBubble(text, role = "bot", extras = null) {
         const item = document.createElement("article");
         item.className = `bubble ${role}`;
-        item.textContent = text;
+        if (role === "bot") {
+          item.innerHTML = formatResponseText(text);
+        } else {
+          item.textContent = text;
+        }
 
         if (extras && role === "bot") {
           const meta = document.createElement("div");
@@ -570,6 +697,10 @@
         }
       }
 
+      // Conversation history sent with each request so follow-ups have context.
+      const conversation = [];
+      const MAX_HISTORY = 6; // last 3 user/assistant pairs
+
       chatForm.addEventListener("submit", async (event) => {
         event.preventDefault();
 
@@ -586,7 +717,7 @@
           const response = await fetch("/api/qa/ask", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question }),
+            body: JSON.stringify({ question, history: conversation.slice(-MAX_HISTORY) }),
           });
 
           const payload = await response.json();
@@ -596,7 +727,10 @@
             appendBubble(payload.error || "Request failed. Try again.", "bot");
           } else {
             const data = payload.data || {};
-            appendBubble(data.answer || "No answer returned.", "bot");
+            const answer = data.answer || "No answer returned.";
+            appendBubble(answer, "bot");
+            conversation.push({ role: "user", content: question });
+            conversation.push({ role: "assistant", content: answer });
           }
         } catch (_error) {
           removeTyping();
