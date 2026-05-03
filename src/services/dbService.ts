@@ -320,6 +320,45 @@ export class DatabaseService {
     return r.rowCount || 0;
   }
 
+  /**
+   * Remove `pages` rows whose confluence_id is NOT in `keepConfluenceIds`.
+   *
+   * Cascades remove their chunks, embeddings and attachments via FK.
+   * Use `scope` to limit deletion:
+   *   - 'all'         — every page row not in the keep set is deleted.
+   *   - 'pages'       — only Confluence pages (confluence_id NOT LIKE 'att:%').
+   *   - 'attachments' — only synthetic attachment-pages (confluence_id LIKE 'att:%').
+   *
+   * Defensive: if `keepConfluenceIds` is empty AND scope would otherwise wipe
+   * everything, we refuse to delete to avoid nuking the database when an
+   * upstream API call returned no results due to a transient failure.
+   */
+  async deleteStalePages(
+    keepConfluenceIds: string[],
+    scope: "all" | "pages" | "attachments" = "all"
+  ): Promise<number> {
+    if (!keepConfluenceIds || keepConfluenceIds.length === 0) {
+      logger.warn(
+        "deleteStalePages called with empty keep list; refusing to delete anything"
+      );
+      return 0;
+    }
+
+    let scopeClause = "";
+    if (scope === "pages") {
+      scopeClause = " AND confluence_id NOT LIKE 'att:%'";
+    } else if (scope === "attachments") {
+      scopeClause = " AND confluence_id LIKE 'att:%'";
+    }
+
+    const r = await this.pool.query(
+      `DELETE FROM pages
+        WHERE confluence_id <> ALL($1::text[])${scopeClause}`,
+      [keepConfluenceIds]
+    );
+    return r.rowCount || 0;
+  }
+
   async getAttachmentStats(): Promise<{ total: number; totalSize: number }> {
     const r = await this.pool.query(
       "SELECT COUNT(*)::int AS total, COALESCE(SUM(file_size),0)::bigint AS total_size FROM attachments"

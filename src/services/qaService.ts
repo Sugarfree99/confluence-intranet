@@ -482,15 +482,9 @@ Fristående fråga:`;
       if (seen.has(s.pageId)) continue;
       seen.add(s.pageId);
       const title = s.title || "Dokument";
-      let href: string;
-      if (s.confluenceId && s.confluenceId.startsWith("att:")) {
-        const attId = s.confluenceId.substring(4);
-        href = `/attachment/${encodeURIComponent(attId)}/raw?download=1`;
-      } else {
-        const slug = this.slugify(title);
-        if (!slug) continue;
-        href = `/doc/${slug}`;
-      }
+      const slug = this.slugify(title);
+      if (!slug) continue;
+      const href = `/doc/${slug}`;
       lines.push(`- [${title}](${href})`);
       if (lines.length >= 3) break;
     }

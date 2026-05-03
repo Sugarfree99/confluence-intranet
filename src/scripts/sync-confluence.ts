@@ -129,6 +129,11 @@ async function sync() {
     let attachmentsExtracted = 0;
     let attachmentsSkipped = 0;
     let attachmentsFailed = 0;
+
+    // Track every confluence_id we touched so we can prune anything that no
+    // longer exists in Confluence at the end of the run.
+    const keptPageConfluenceIds: string[] = [];
+    const keptAttachmentPageIds: string[] = [];
     for (const page of pages) {
       try {
         // Extract text from HTML
@@ -147,6 +152,7 @@ async function sync() {
         });
 
         synced++;
+        keptPageConfluenceIds.push(page.id);
 
         // Sync attachments for this page
         let pageAttachments: any[] = [];
@@ -229,6 +235,12 @@ async function sync() {
             const buffer = await downloadAttachment(downloadPath);
             const extracted = await extractAttachmentText(buffer, mediaType, fileName);
             const text = sanitizeForDb(extracted.text);
+            // Prefer the structured HTML rendering when the extractor
+            // produced one (PDFs with tables/forms, DOCX). Fall back to
+            // the plain text so the row always has something renderable.
+            const rawHtmlForAtt = extracted.html
+              ? sanitizeForDb(extracted.html)
+              : text;
 
             if (!text || text.length < 20) {
               attachmentsSkipped++;
@@ -255,9 +267,11 @@ async function sync() {
               content: text,
               space_key: spaceKey,
               url: attUrl,
-              raw_html: text,
+              raw_html: rawHtmlForAtt,
               last_synced: new Date(),
             });
+
+            keptAttachmentPageIds.push(attPageConfluenceId);
 
             const attResult = await chunkAndEmbed(
               attPageDbId,
@@ -304,6 +318,28 @@ async function sync() {
     );
     logger.info(
       `✓ Extracted text from ${attachmentsExtracted} attachments (skipped: ${attachmentsSkipped}, failed: ${attachmentsFailed})`
+    );
+
+    // Prune anything that no longer exists in Confluence. Pages and synthetic
+    // attachment-pages are scoped separately so a partial run (e.g. attachment
+    // extraction temporarily disabled) cannot wipe the other category. Cascade
+    // FKs remove the orphaned chunks, embeddings and attachment rows.
+    let removedPages = 0;
+    let removedAttachmentPages = 0;
+    if (keptPageConfluenceIds.length > 0) {
+      removedPages = await dbService.deleteStalePages(
+        keptPageConfluenceIds,
+        "pages"
+      );
+    }
+    if (keptAttachmentPageIds.length > 0) {
+      removedAttachmentPages = await dbService.deleteStalePages(
+        keptAttachmentPageIds,
+        "attachments"
+      );
+    }
+    logger.info(
+      `✓ Removed ${removedPages} stale pages and ${removedAttachmentPages} stale attachment-pages`
     );
 
     // Show stats

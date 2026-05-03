@@ -10,481 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        --ink: #10192a;
-        --paper: #f6f8fb;
-        --panel: #ffffff;
-        --line: #d7deea;
-        --accent: #1570ef;
-        --accent-soft: #e8f1ff;
-        --glow: #ffd16f;
-        --bot: #f2f6ff;
-        --user: #102748;
-        --user-text: #f7fbff;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: "Space Grotesk", sans-serif;
-        color: var(--ink);
-        background: #fff;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 0;
-      }
-
-      .chat-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 30;
-        width: 100%;
-        padding: 10px 0;
-        border-bottom: 1px solid transparent;
-        background: transparent;
-        transition: background 200ms ease, border-color 200ms ease;
-      }
-
-      .chat-header.scrolled {
-        border-bottom-color: rgba(0, 0, 0, 0.08);
-        background: #b8e6c1;
-      }
-
-      .wrapper {
-        max-width: 1300px;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        margin: 0 auto;
-        padding: 0 2%;
-      }
-
-      .header-wrapper {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .chat-header .logo {
-        height: 56px;
-        width: auto;
-        flex-shrink: 0;
-      }
-
-      .page-content {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-
-      .page-content .hero-unit {
-        background-color: #eee;
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-      }
-
-      .page-content .hero-unit.home-hero {
-        width: 100%;
-        height: 500px;
-        background: #111;
-        background-image: url("/background.jpg");
-      }
-
-      .menu-btn {
-        border: 0;
-        background: transparent;
-        color: #ffffff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        padding: 0 6px;
-        height: 46px;
-        border-radius: 10px;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 18px;
-        line-height: 1;
-      }
-
-      .menu-btn:hover {
-        background: rgba(255, 255, 255, 0.22);
-      }
-
-      .chat-header.scrolled .menu-btn {
-        color: #ffffff;
-      }
-
-      .menu-icon {
-        display: inline-flex;
-        flex-direction: column;
-        gap: 5px;
-      }
-
-      .menu-icon span {
-        display: block;
-        width: 20px;
-        height: 2px;
-        border-radius: 999px;
-        background: currentColor;
-      }
-
-      .menu-label {
-        font-size: 0.95em;
-        font-weight: 500;
-        letter-spacing: 0.02em;
-      }
-
-      .chat-shell {
-        width: min(980px, 100%);
-        height: min(780px, calc(100vh - 110px));
-        margin-top: 0;
-        margin-left: auto;
-        margin-right: auto;
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 24px;
-        overflow: hidden;
-        display: grid;
-        grid-template-rows: 1fr auto;
-        box-shadow:
-          0 1px 0 #ffffff,
-          0 14px 36px rgba(25, 45, 75, 0.12);
-      }
-
-      .content-block {
-        width: 100%;
-        max-width: 1300px;
-        padding: 50px 20px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-
-      .site-footer {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        background: #404040;
-        padding: 20px;
-      }
-
-      .footer-inner {
-        width: 100%;
-        max-width: 1300px;
-        display: flex;
-        justify-content: center;
-      }
-
-      .footer-block {
-        padding: 50px 0;
-      }
-
-      .footer-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0;
-      }
-
-      .footer-logo-wrap {
-        height: 72px;
-        display: flex;
-        align-items: center;
-      }
-
-      .site-footer .footer-logo {
-        height: 100%;
-        width: auto;
-        margin-bottom: 15px;
-      }
-
-      .site-footer .footer-text {
-        margin: 0;
-        font-size: 15px;
-        color: #ffffff;
-      }
-
-      .logout-form {
-        margin-top: 15px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .logout-form p {
-        margin: 0;
-        color: #ffffff;
-      }
-
-      .logout-form .logout-btn {
-        border: 0;
-        background: #ffffff;
-        color: #1f1f1f;
-        padding: 10px 20px;
-        border-radius: 2px;
-        font-family: inherit;
-        font-size: 16px;
-        cursor: pointer;
-      }
-
-      .chat-log {
-        padding: 20px;
-        overflow: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .bubble {
-        max-width: 82%;
-        border-radius: 16px;
-        padding: 12px 14px;
-        line-height: 1.45;
-        animation: reveal 220ms ease-out;
-      }
-
-      .bubble.user {
-        margin-left: auto;
-        background: var(--user);
-        color: var(--user-text);
-        border-bottom-right-radius: 6px;
-      }
-
-      .bubble.bot {
-        background: var(--bot);
-        border: 1px solid #d8e3ff;
-        border-bottom-left-radius: 6px;
-      }
-
-      .bubble.bot p {
-        margin: 0 0 10px;
-      }
-
-      .bubble.bot p:last-child {
-        margin-bottom: 0;
-      }
-
-      .bubble.bot ul,
-      .bubble.bot ol {
-        margin: 0 0 10px;
-        padding-left: 22px;
-      }
-
-      .bubble.bot li {
-        margin: 4px 0;
-      }
-
-      .meta {
-        margin-top: 10px;
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-
-      .chip {
-        background: var(--accent-soft);
-        color: #0f3f86;
-        font-size: 12px;
-        border: 1px solid #c8dbff;
-        border-radius: 999px;
-        padding: 4px 10px;
-        font-family: inherit;
-      }
-
-      .sources {
-        margin-top: 10px;
-        border-top: 1px dashed #cbd9f4;
-        padding-top: 10px;
-      }
-
-      .source-item {
-        background: #ffffff;
-        border: 1px solid #d5e0f8;
-        border-radius: 10px;
-        padding: 8px;
-        margin-top: 8px;
-      }
-
-      .source-title {
-        font-size: 13px;
-        font-weight: 600;
-        margin: 0 0 4px;
-      }
-
-      .source-excerpt {
-        margin: 0;
-        font-size: 13px;
-        color: #36445f;
-      }
-
-      .composer {
-        padding: 14px;
-        border-top: 1px solid var(--line);
-        background: #ffffff;
-      }
-
-      .composer-form {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 10px;
-      }
-
-      .composer-input {
-        width: 100%;
-        border: 1px solid #c8d4ea;
-        border-radius: 14px;
-        padding: 12px 14px;
-        font-size: 15px;
-        font-family: inherit;
-        background: #fbfdff;
-      }
-
-      .composer-input:focus {
-        outline: none;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(21, 112, 239, 0.17);
-      }
-
-      .send-btn {
-        border: 0;
-        border-radius: 14px;
-        padding: 0 22px;
-        font-family: inherit;
-        font-size: 13px;
-        color: #ffffff;
-        cursor: pointer;
-        background: #26b275;
-      }
-
-      .send-btn:hover:not([disabled]) {
-        background: #21a06a;
-      }
-
-      .send-btn[disabled] {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      .hint {
-        margin: 9px 2px 0;
-        font-size: 12px;
-        color: #62738f;
-      }
-
-      .typing {
-        display: inline-flex;
-        gap: 4px;
-        align-items: center;
-      }
-
-      .typing span {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #5877ae;
-        animation: pulse 1s infinite ease-in-out;
-      }
-
-      .typing span:nth-child(2) {
-        animation-delay: 120ms;
-      }
-
-      .typing span:nth-child(3) {
-        animation-delay: 240ms;
-      }
-
-      @keyframes reveal {
-        from {
-          transform: translateY(6px);
-          opacity: 0;
-        }
-        to {
-          transform: translateY(0);
-          opacity: 1;
-        }
-      }
-
-      @keyframes pulse {
-        0%,
-        80%,
-        100% {
-          opacity: 0.25;
-          transform: scale(0.7);
-        }
-        40% {
-          opacity: 1;
-          transform: scale(1);
-        }
-      }
-
-      @media (max-width: 720px) {
-        body {
-          padding: 0;
-        }
-
-        .chat-shell {
-          height: calc(100vh - 96px);
-          border-radius: 18px;
-        }
-
-        .content-block {
-          padding: 50px 10px;
-        }
-
-        .chat-header {
-          padding: 8px 0;
-        }
-
-        .page-content .hero-unit.home-hero {
-          height: 260px;
-        }
-
-        .chat-header .logo {
-          height: 44px;
-        }
-
-        .menu-btn {
-          gap: 10px;
-          padding: 0 4px;
-          height: 40px;
-          font-size: 16px;
-        }
-
-        .site-footer .footer-logo {
-          height: 100%;
-        }
-
-        .site-footer .footer-text {
-          font-size: 14px;
-        }
-
-        .footer-logo-wrap {
-          height: 58px;
-        }
-
-        .bubble {
-          max-width: 94%;
-        }
-      }
-
-      @media only screen and (min-width: 961px) and (max-width: 1439px) {
-        .page-content .hero-unit.home-hero {
-          height: 400px;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="chat-header" id="chatHeader">
@@ -505,27 +31,35 @@
       <section class="hero-unit home-hero" aria-hidden="true"></section>
 
       <div class="content-block">
-        <main class="chat-shell">
-          <section id="chatLog" class="chat-log" aria-live="polite">
-            <article class="bubble bot">
-              Ställ en fråga om företagets interna dokument. Jag söker igenom relevanta medarbetardokument med RAG och ger dig ett kort, tydligt svar.
-            </article>
-          </section>
+        <div id="workspace" class="workspace">
+          <aside id="previewPane" class="preview-pane" aria-label="Sidvisning">
+            <button id="previewClose" class="preview-close" type="button" aria-label="Stäng sida">×</button>
+            <div id="previewFrame" class="preview-frame" aria-label="Sidinnehåll"></div>
+          </aside>
+          <div id="resizer" class="resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Ändra storlek på paneler"></div>
+          <main class="chat-pane">
+            <div class="chat-pane-header" aria-label="Chatrubrik">Nordrest Chat</div>
+            <section id="chatLog" class="chat-log" aria-live="polite">
+              <article class="bubble bot">
+                Ställ en fråga om företagets interna dokument. Jag söker igenom relevanta medarbetardokument med RAG och ger dig ett kort, tydligt svar.
+              </article>
+            </section>
 
-          <footer class="composer">
-            <form id="chatForm" class="composer-form">
-              <input
-                id="questionInput"
-                class="composer-input"
-                type="text"
-                placeholder="Ställ en fråga om företagets dokument..."
-                autocomplete="off"
-                required
-              />
-              <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
-            </form>
-          </footer>
-        </main>
+            <footer class="composer">
+              <form id="chatForm" class="composer-form">
+                <input
+                  id="questionInput"
+                  class="composer-input"
+                  type="text"
+                  placeholder="Ställ en fråga om företagets dokument..."
+                  autocomplete="off"
+                  required
+                />
+                <button id="sendBtn" class="send-btn" type="submit">Skicka</button>
+              </form>
+            </footer>
+          </main>
+        </div>
       </div>
     </div>
 
@@ -554,6 +88,247 @@
       const questionInput = document.getElementById("questionInput");
       const sendBtn = document.getElementById("sendBtn");
       const chatHeader = document.getElementById("chatHeader");
+      const workspace = document.getElementById("workspace");
+      const previewPane = document.getElementById("previewPane");
+      const previewFrame = document.getElementById("previewFrame");
+      const previewClose = document.getElementById("previewClose");
+      const resizer = document.getElementById("resizer");
+
+      // Render a Confluence page directly inside the host document. We fetch
+      // the page as a JSON fragment (`?fragment=1`) and inject the HTML into
+      // a div so it lives in the same DOM as the chat — no iframe.
+      // Highlight the chunk that RAG matched. The excerpt that comes back
+      // from the server is the first ~200 chars of the chunk text, which is
+      // extracted from the page body and may include punctuation/whitespace
+      // (table pipes, newlines) that don't appear verbatim in the rendered
+      // HTML. So we tokenize both sides into words and search for the
+      // longest contiguous run of excerpt-words inside the page.
+      function tokenize(text) {
+        // Keep letters (incl. Nordic), digits and `@` so e.g. e-mail
+        // addresses survive as recognizable tokens. Everything else becomes
+        // a separator. We return both the lowercased token and its
+        // position in the original text for later range-mapping.
+        const re = /[\p{L}\p{N}@.+\-_]+/gu;
+        const out = [];
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          out.push({ word: m[0].toLowerCase(), start: m.index, end: m.index + m[0].length });
+        }
+        return out;
+      }
+
+      // Try to find a page header (h1-h6) that matches the excerpt tokens.
+      // Headers are stable section markers, so we prefer matching them over
+      // matching content. Returns the header element or null.
+      function matchHeaderToExcerpt(container, excerptTokens) {
+        if (excerptTokens.length === 0) return null;
+        const headers = Array.from(container.querySelectorAll("h1, h2, h3, h4, h5, h6"));
+        let bestHeader = null;
+        let bestScore = 0;
+
+        for (const header of headers) {
+          const headerTokens = tokenize(header.textContent || "").map((t) => t.word);
+          if (headerTokens.length === 0) continue;
+
+          const excerptSet = new Set(excerptTokens);
+          let matchCount = 0;
+
+          if (headerTokens.length <= 5) {
+            for (const w of headerTokens) {
+              if (excerptSet.has(w)) matchCount++;
+            }
+            const threshold = Math.ceil(headerTokens.length * 0.6);
+            if (matchCount >= threshold && matchCount > bestScore) {
+              bestScore = matchCount;
+              bestHeader = header;
+            }
+          } else {
+            const headerSet = new Set(headerTokens);
+            for (const w of excerptTokens) {
+              if (headerSet.has(w)) matchCount++;
+            }
+            const threshold = Math.max(3, excerptTokens.length * 0.5);
+            if (matchCount >= threshold && matchCount > bestScore) {
+              bestScore = matchCount;
+              bestHeader = header;
+            }
+          }
+        }
+        return bestHeader;
+      }
+
+      // Resolve a scroll target for the matched excerpts. We only use
+      // header matching now — no inline mark wrapping — because content
+      // highlighting was unreliable across tables and rich layouts.
+      function highlightExcerpts(container, excerpts) {
+        if (!container || !Array.isArray(excerpts) || excerpts.length === 0) return null;
+        for (const raw of excerpts) {
+          if (typeof raw !== "string" || !raw.trim()) continue;
+          const excerptTokens = tokenize(
+            raw.replace(/\u2026|\.{3,}/g, " ")
+          ).map((t) => t.word);
+          if (excerptTokens.length === 0) continue;
+          const header = matchHeaderToExcerpt(container, excerptTokens);
+          if (header) {
+            header.classList.add("rag-hit-target");
+            return header;
+          }
+        }
+        return null;
+      }
+
+      let previewToken = 0;
+
+      // After we render, images load and the page reflows. Re-scroll to
+      // the matched region a few times: immediately, after a short
+      // timeout, and once all images have finished loading. We bail if
+      // the user has opened a different page in the meantime (token).
+      function scheduleStableScroll(container, hitOrNull, token) {
+        function findTarget() {
+          if (hitOrNull && hitOrNull.isConnected) return hitOrNull;
+          return container.querySelector(".rag-hit-target");
+        }
+
+        // Use 'auto' (instant) for the first pass so the page lands at
+        // the right region immediately rather than animating from the
+        // top — smooth scroll for later passes is fine since the user
+        // would see them as gentle corrections.
+        const doScroll = (behavior) => {
+          if (token !== previewToken) return;
+          const target = findTarget();
+          if (!target) return;
+          try {
+            target.scrollIntoView({ behavior: behavior || "auto", block: "center" });
+          } catch (_e) {
+            target.scrollIntoView();
+          }
+        };
+
+        requestAnimationFrame(() => doScroll("auto"));
+        setTimeout(() => doScroll("auto"), 250);
+
+        const imgs = Array.from(container.querySelectorAll("img"));
+        const pending = imgs.filter((img) => !img.complete);
+        if (pending.length === 0) return;
+        let remaining = pending.length;
+        const onDone = () => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            requestAnimationFrame(() => doScroll("smooth"));
+          }
+        };
+        for (const img of pending) {
+          img.addEventListener("load", onDone, { once: true });
+          img.addEventListener("error", onDone, { once: true });
+        }
+        setTimeout(() => {
+          if (remaining > 0) {
+            remaining = 0;
+            requestAnimationFrame(() => doScroll("smooth"));
+          }
+        }, 2000);
+      }
+      async function openPreview(url, title, excerpts) {
+        if (!url) return;
+        workspace.classList.add("split");
+        previewFrame.scrollTop = 0;
+        previewFrame.innerHTML = '<p class="doc-loading">Laddar sida…</p>';
+        const myToken = ++previewToken;
+        const fragmentUrl = /^\/doc\//.test(url)
+          ? url + (url.includes("?") ? "&" : "?") + "fragment=1"
+          : null;
+
+        if (!fragmentUrl) {
+          previewFrame.innerHTML =
+            '<p class="doc-error">Den h\u00e4r sidan kan inte visas h\u00e4r. <a href="' +
+            url +
+            '" target="_blank" rel="noopener noreferrer">\u00d6ppna i ny flik</a>.</p>';
+          return;
+        }
+
+        try {
+          const response = await fetch(fragmentUrl, {
+            headers: { Accept: "application/json" },
+          });
+          if (myToken !== previewToken) return;
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          const payload = await response.json();
+          if (myToken !== previewToken) return;
+          // Inject title as an h1 so the page reads as a real page now that
+          // the chrome header is gone. Add right padding so the heading
+          // doesn't run under the floating close button.
+          const safeTitle = escapeHtml(payload.title || title || "");
+          previewFrame.innerHTML =
+            (safeTitle
+              ? '<h1 class="doc-title" style="padding-right:44px">' + safeTitle + "</h1>"
+              : "") + (payload.bodyHtml || "");
+          previewFrame.querySelectorAll("a[href]").forEach((a) => {
+            const href = a.getAttribute("href") || "";
+            if (/^https?:/i.test(href)) {
+              a.setAttribute("target", "_blank");
+              a.setAttribute("rel", "noopener noreferrer");
+            }
+          });
+          const hit = highlightExcerpts(previewFrame, excerpts);
+
+          // Images and lazy resources reflow the page after the initial
+          // scrollIntoView, which means the target slides off-screen. Wait
+          // for any in-flight images to settle, then re-scroll so the
+          // matched region is actually in view when the user looks.
+          scheduleStableScroll(previewFrame, hit, myToken);
+        } catch (err) {
+          if (myToken !== previewToken) return;
+          previewFrame.innerHTML =
+            '<p class="doc-error">Kunde inte ladda sidan. <a href="' +
+            url +
+            '" target="_blank" rel="noopener noreferrer">\u00d6ppna i ny flik</a>.</p>';
+        }
+      }
+
+      function closePreview() {
+        previewToken++;
+        workspace.classList.remove("split");
+        previewFrame.innerHTML = "";
+      }
+
+      previewClose.addEventListener("click", closePreview);
+
+      // Drag-to-resize for the divider. Pointer events with capture survive
+      // fast cursor movement, and the .dragging class disables pointer
+      // events on the rendered page so it can't swallow the mouse stream.
+      let dragPointerId = null;
+      function onDragMove(event) {
+        if (dragPointerId === null) return;
+        const rect = workspace.getBoundingClientRect();
+        const offset = event.clientX - rect.left;
+        const pct = Math.min(85, Math.max(15, (offset / rect.width) * 100));
+        previewPane.style.flex = `0 0 ${pct}%`;
+      }
+      function endDrag() {
+        if (dragPointerId === null) return;
+        try {
+          resizer.releasePointerCapture(dragPointerId);
+        } catch (_err) {
+          /* pointer may already be released */
+        }
+        dragPointerId = null;
+        resizer.classList.remove("dragging");
+        workspace.classList.remove("dragging");
+        window.removeEventListener("pointermove", onDragMove);
+        window.removeEventListener("pointerup", endDrag);
+        window.removeEventListener("pointercancel", endDrag);
+      }
+      resizer.addEventListener("pointerdown", (event) => {
+        if (!workspace.classList.contains("split")) return;
+        dragPointerId = event.pointerId;
+        resizer.setPointerCapture(dragPointerId);
+        resizer.classList.add("dragging");
+        workspace.classList.add("dragging");
+        window.addEventListener("pointermove", onDragMove);
+        window.addEventListener("pointerup", endDrag);
+        window.addEventListener("pointercancel", endDrag);
+        event.preventDefault();
+      });
 
       function updateHeaderState() {
         const pageScrolled = window.scrollY > 4;
@@ -570,6 +345,132 @@
       window.addEventListener("scroll", updateHeaderState, { passive: true });
       updateHeaderState();
 
+      function normalizeTitleKey(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function normalizeDocPath(value) {
+        if (!value) return "";
+        try {
+          const parsed = new URL(value, window.location.origin);
+          return decodeURIComponent(parsed.pathname)
+            .replace(/\/+$/, "")
+            .toLowerCase();
+        } catch (_err) {
+          return decodeURIComponent(String(value).split(/[?#]/)[0])
+            .replace(/\/+$/, "")
+            .toLowerCase();
+        }
+      }
+
+      function isPageSource(source) {
+        const id = typeof source?.confluenceId === "string" ? source.confluenceId : "";
+        return !id.startsWith("att:");
+      }
+
+      function addToMapList(map, key, source) {
+        if (!key) return;
+        const list = map.get(key);
+        if (list) list.push(source);
+        else map.set(key, [source]);
+      }
+
+      function sortByRelevance(sources) {
+        return [...sources].sort(
+          (a, b) => (Number(b?.relevance) || 0) - (Number(a?.relevance) || 0)
+        );
+      }
+
+      function buildSourceContext(sources) {
+        const pageSources = (Array.isArray(sources) ? sources : []).filter(isPageSource);
+        const byPath = new Map();
+        const byTitle = new Map();
+
+        for (const source of pageSources) {
+          addToMapList(byPath, normalizeDocPath(source?.url || ""), source);
+          addToMapList(byTitle, normalizeTitleKey(source?.title || ""), source);
+        }
+
+        return {
+          pageSources,
+          byPath,
+          byTitle,
+        };
+      }
+
+      function dedupeExcerpts(values) {
+        const out = [];
+        const seen = new Set();
+        for (const value of values) {
+          if (typeof value !== "string") continue;
+          const excerpt = value.trim();
+          if (!excerpt) continue;
+          if (seen.has(excerpt)) continue;
+          seen.add(excerpt);
+          out.push(excerpt);
+        }
+        return out;
+      }
+
+      function resolveSourceFromLink(href, title, sourceContext) {
+        if (!sourceContext) return null;
+        const pathKey = normalizeDocPath(href);
+        const titleKey = normalizeTitleKey(title);
+
+        const pathMatches = sourceContext.byPath.get(pathKey) || [];
+        if (pathMatches.length > 0) return sortByRelevance(pathMatches)[0];
+
+        const titleMatches = sourceContext.byTitle.get(titleKey) || [];
+        if (titleMatches.length > 0) return sortByRelevance(titleMatches)[0];
+
+        if (sourceContext.pageSources.length === 1) return sourceContext.pageSources[0];
+        return null;
+      }
+
+      function collectContextExcerpts(source, sourceContext) {
+        if (!sourceContext) return [];
+        const merged = [];
+
+        const pathKey = normalizeDocPath(source?.url || "");
+        const titleKey = normalizeTitleKey(source?.title || "");
+
+        if (pathKey) {
+          for (const s of sourceContext.byPath.get(pathKey) || []) merged.push(s?.excerpt);
+        }
+        if (titleKey) {
+          for (const s of sourceContext.byTitle.get(titleKey) || []) merged.push(s?.excerpt);
+        }
+        if (merged.length === 0 && source?.excerpt) merged.push(source.excerpt);
+        if (merged.length === 0) {
+          for (const s of sortByRelevance(sourceContext.pageSources).slice(0, 3)) {
+            merged.push(s?.excerpt);
+          }
+        }
+
+        return dedupeExcerpts(merged);
+      }
+
+      // Catch clicks on inline source links inside answer text. /doc/* and
+      // /attachment/* both render in the side pane.
+      chatLog.addEventListener("click", (event) => {
+        const link = event.target.closest("a.src-link.is-page, a.src-link.is-download");
+        if (!link) return;
+        event.preventDefault();
+        const href = link.getAttribute("href");
+        const title = link.textContent || "Sida";
+
+        const bubble = link.closest(".bubble");
+        const sourceContext =
+          (bubble && bubble._ragSourceContext) ||
+          buildSourceContext((bubble && bubble._ragSources) || []);
+        const match = resolveSourceFromLink(href, title, sourceContext);
+        const excerpts = collectContextExcerpts(match, sourceContext);
+        openPreview(href, title, excerpts);
+      });
+
       function escapeHtml(value) {
         return value
           .replace(/&/g, "&amp;")
@@ -581,7 +482,9 @@
 
       // Render inline markdown: **bold** and [text](url) links.
       // Input is plain text; output is HTML-safe with the limited markdown
-      // expanded into <strong> and <a> elements.
+      // expanded into <strong> and <a> elements. Internal links are tagged
+      // with helper classes so the click handler can route /doc/* into the
+      // preview pane and so /attachment/* render with a download icon.
       function renderInline(text) {
         const linkRegex = /\[([^\]]+)\]\(([^)\s]+)\)/g;
         const parts = [];
@@ -595,10 +498,15 @@
           const rawUrl = match[2];
           const safe = /^(https?:|\/)/i.test(rawUrl);
           const href = safe ? escapeHtml(rawUrl) : "#";
+          const isDownload = /^\/attachment\//i.test(rawUrl);
+          const isPage = /^\/doc\//i.test(rawUrl);
           const targetAttr = /^https?:/i.test(rawUrl)
             ? ' target="_blank" rel="noopener noreferrer"'
             : "";
-          parts.push(`<a href="${href}"${targetAttr}>${label}</a>`);
+          let cls = "";
+          if (isDownload) cls = ' class="src-link is-download"';
+          else if (isPage) cls = ' class="src-link is-page"';
+          parts.push(`<a href="${href}"${cls}${targetAttr}>${label}</a>`);
           lastIndex = linkRegex.lastIndex;
         }
         if (lastIndex < text.length) {
@@ -662,47 +570,11 @@
         }
 
         if (extras && role === "bot") {
-          const meta = document.createElement("div");
-          meta.className = "meta";
-
-          if (typeof extras.confidence === "number") {
-            const confidenceChip = document.createElement("span");
-            confidenceChip.className = "chip";
-            confidenceChip.textContent = `confidence: ${(extras.confidence * 100).toFixed(0)}%`;
-            meta.appendChild(confidenceChip);
-          }
-
-          if (extras.sourcesCount > 0) {
-            const sourceChip = document.createElement("span");
-            sourceChip.className = "chip";
-            sourceChip.textContent = `sources: ${extras.sourcesCount}`;
-            meta.appendChild(sourceChip);
-          }
-
-          item.appendChild(meta);
-
+          // Stash the source list on the bubble so inline-link clicks can
+          // look up the matching excerpt and highlight it in the page.
           if (Array.isArray(extras.sources) && extras.sources.length > 0) {
-            const sources = document.createElement("section");
-            sources.className = "sources";
-
-            extras.sources.slice(0, 3).forEach((s) => {
-              const sourceItem = document.createElement("div");
-              sourceItem.className = "source-item";
-
-              const title = document.createElement("p");
-              title.className = "source-title";
-              title.textContent = s.title || "Untitled source";
-
-              const excerpt = document.createElement("p");
-              excerpt.className = "source-excerpt";
-              excerpt.textContent = s.excerpt || "No excerpt";
-
-              sourceItem.appendChild(title);
-              sourceItem.appendChild(excerpt);
-              sources.appendChild(sourceItem);
-            });
-
-            item.appendChild(sources);
+            item._ragSources = extras.sources;
+            item._ragSourceContext = buildSourceContext(extras.sources);
           }
         }
 
@@ -757,12 +629,17 @@
           } else {
             const data = payload.data || {};
             const answer = data.answer || "No answer returned.";
-            appendBubble(answer, "bot");
+            const responseSources = Array.isArray(data.sources) ? data.sources : [];
+            appendBubble(answer, "bot", {
+              confidence: typeof data.confidence === "number" ? data.confidence : null,
+              sourcesCount: responseSources.length,
+              sources: responseSources,
+            });
 
             // Only feed grounded turns into the next request's context.
             // If the backend returned no sources, the model said "I don't
             // know" — keeping that in history would only confuse follow-ups.
-            const grounded = Array.isArray(data.sources) && data.sources.length > 0;
+            const grounded = responseSources.length > 0;
             if (grounded) {
               conversation.push({ role: "user", content: question });
               conversation.push({ role: "assistant", content: answer });

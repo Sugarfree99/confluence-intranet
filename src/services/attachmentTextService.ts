@@ -1,8 +1,8 @@
 import axios from "axios";
 import * as winston from "winston";
 import { config } from "../config";
-import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
+import { extractStructuredPdf } from "./pdfStructuredExtractor";
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || "info",
@@ -12,6 +12,12 @@ const logger = winston.createLogger({
 
 export interface ExtractedAttachment {
   text: string;
+  /**
+   * Optional semantic HTML rendering of the file (tables, headings,
+   * form fields). When present, the inline preview should use this
+   * instead of paragraph-rendering the plain text.
+   */
+  html?: string;
   pages?: number;
   extractor: "pdf" | "docx" | "text" | "unsupported";
 }
@@ -74,20 +80,25 @@ export async function extractAttachmentText(
 
   try {
     if (PDF_MEDIA_TYPES.has(mt) || lowerName.endsWith(".pdf")) {
-      const parser = new PDFParse({ data: buffer });
-      const result = await parser.getText();
-      await parser.destroy();
+      const result = await extractStructuredPdf(buffer);
       return {
         text: (result.text || "").trim(),
-        pages: result.total,
+        html: result.html,
+        pages: result.pages,
         extractor: "pdf",
       };
     }
 
     if (DOCX_MEDIA_TYPES.has(mt) || lowerName.endsWith(".docx")) {
-      const result = await mammoth.extractRawText({ buffer });
+      // mammoth.convertToHtml preserves headings, tables and lists from
+      // the DOCX -> drives the same inline preview path as PDFs.
+      const [textRes, htmlRes] = await Promise.all([
+        mammoth.extractRawText({ buffer }),
+        mammoth.convertToHtml({ buffer }),
+      ]);
       return {
-        text: (result.value || "").trim(),
+        text: (textRes.value || "").trim(),
+        html: htmlRes.value || "",
         extractor: "docx",
       };
     }

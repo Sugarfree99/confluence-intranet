@@ -190,10 +190,33 @@ app.get("/doc/:slug", async (req, res) => {
         }
       }
 
-      bodyHtml = downloadHref
-        ? `<p>Filen <strong>${escapeHtml(fileName)}</strong> (${escapeHtml(mediaType)}, ${escapeHtml(sizeStr)}) kan laddas ner nedan.</p>
-           <p><a class="btn" href="${escapeHtml(downloadHref)}">Ladda ner ${escapeHtml(fileName)}</a></p>`
-        : `<p><em>Filen är inte tillgänglig för nedladdning.</em></p>`;
+      bodyHtml = "";
+      // Prefer the structured HTML rendering produced at sync time
+      // (preserves tables and form fields). Fall back to paragraph-
+      // rendering the plain text if no HTML was stored.
+      const storedHtml = (match.raw_html || "").trim();
+      const looksLikeHtml = /<\w+[\s>]/.test(storedHtml);
+      if (storedHtml && looksLikeHtml) {
+        bodyHtml += storedHtml;
+      } else {
+        const extractedText = (match.content || "").trim();
+        if (extractedText) {
+          const paragraphs = extractedText
+            .split(/\n{2,}/)
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0)
+            .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+            .join("");
+          bodyHtml += paragraphs;
+        }
+      }
+      if (downloadHref) {
+        const meta = `<p class="attachment-meta"><em>${escapeHtml(fileName)} \u2014 ${escapeHtml(mediaType)}, ${escapeHtml(sizeStr)}</em></p>`;
+        const dl = `<p><a class="btn" href="${escapeHtml(downloadHref)}">Ladda ner ${escapeHtml(fileName)}</a></p>`;
+        bodyHtml = meta + dl + (bodyHtml || `<p><em>Ingen text kunde extraheras fr\u00e5n filen.</em></p>`);
+      } else if (!bodyHtml) {
+        bodyHtml = `<p><em>Filen \u00e4r inte tillg\u00e4nglig f\u00f6r nedladdning.</em></p>`;
+      }
 
       if (downloadHref) {
         originalLink = { href: downloadHref, label: "Ladda ner" };
@@ -221,6 +244,18 @@ app.get("/doc/:slug", async (req, res) => {
       } catch {
         // Non-fatal: just skip the attachment list.
       }
+    }
+
+    // When the chat UI requests `?fragment=1` we return just the renderable
+    // pieces as JSON so it can be inlined into the page (no iframe needed).
+    if (req.query.fragment === "1") {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return res.json({
+        success: true,
+        title: match.title,
+        bodyHtml,
+        originalLink,
+      });
     }
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -260,11 +295,10 @@ app.get("/attachment/:id/raw", async (req, res) => {
 
     const mediaType = file.media_type || "application/octet-stream";
     const fileName = file.file_name || file.title || "file";
-    // Always send as attachment so the browser triggers a download dialog.
-    // (Previously we used `inline` unless ?download=1 was set; that caused
-    // browsers to navigate to the URL and try to render the bytes instead
-    // of saving them, so links from chat sources felt "broken".)
-    const disposition = "attachment";
+    // Default to `inline` so the bytes can be previewed in an iframe inside
+    // the chat. Append `?download=1` to force the Save As dialog.
+    const forceDownload = req.query.download === "1";
+    const disposition = forceDownload ? "attachment" : "inline";
 
     // RFC 5987 encoding lets us send Unicode file names safely.
     const asciiName = fileName.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "");
@@ -338,46 +372,54 @@ async function initializeSync() {
       let synced = 0;
       let chunked = 0;
       let embedded = 0;
+      const keptPageConfluenceIds: string[] = [];
 
       for (const page of pages) {
         try {
-          const $ = cheerio.load(page.body.storage.value);
-          const content = $.text().substring(0, 5000);
+          const rawHtml = page.body.storage.value;
+          const $ = cheerio.load(rawHtml);
+          const content = $.text().replace(/\s+/g, " ").trim().substring(0, 5000);
 
-          await dbService.savePage({
+          const pageDbId = await dbService.savePage({
             confluence_id: page.id,
             title: page.title,
             content,
             space_key: (page.space as any)?.key || "UNKNOWN",
             url: (page as any)._links?.webui || "",
-            raw_html: page.body.storage.value,
+            raw_html: rawHtml,
             last_synced: new Date(),
           });
 
           synced++;
+          keptPageConfluenceIds.push(page.id);
 
-          // Process chunks if page was saved
-          const savedPage = await dbService.getPageById(page.id);
-          if (savedPage?.id) {
-            const chunks = await aiOptimizationService.processPageIntoChunks(
-              Number(savedPage.id) || 0,
-              page.id,
-              page.title,
-              page.body.storage.value
-            );
-            chunked += chunks.length;
+          // Replace existing chunks atomically so old content cannot linger
+          // when a Confluence page is edited or shrunk.
+          const TextChunkingService = (await import("./services/textChunkingService")).default;
+          const chunks = TextChunkingService.chunkContent(rawHtml, page.title);
+          if (chunks.length === 0) continue;
 
-            // Generate embeddings
-            for (const chunk of chunks) {
-              if (chunk.id) {
-                try {
-                  const embedding = await embeddingService.generateEmbedding(chunk.content);
-                  await aiOptimizationService.saveEmbedding(chunk.id, embedding);
-                  embedded++;
-                } catch (error) {
-                  logger.error("Failed to embed chunk", { chunkId: chunk.id });
-                }
-              }
+          const insertedChunks = await dbService.replacePageChunks(
+            pageDbId,
+            page.id,
+            chunks
+          );
+          chunked += insertedChunks.length;
+
+          for (const chunk of insertedChunks) {
+            try {
+              const embedding = await embeddingService.generateEmbedding(chunk.content);
+              await dbService.saveChunkEmbedding(
+                chunk.id,
+                embedding,
+                embeddingService.getModel()
+              );
+              embedded++;
+            } catch (error) {
+              logger.error("Failed to embed chunk", {
+                chunkId: chunk.id,
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
           }
         } catch (pageError) {
@@ -388,10 +430,23 @@ async function initializeSync() {
         }
       }
 
+      // Remove pages that no longer exist in Confluence. Cascade FKs clean up
+      // their chunks, embeddings and attachments. Synthetic attachment-pages
+      // ("att:..." rows produced by the manual sync script) are left alone
+      // here because the scheduled sync does not refresh them.
+      let removedPages = 0;
+      if (keptPageConfluenceIds.length > 0) {
+        removedPages = await dbService.deleteStalePages(
+          keptPageConfluenceIds,
+          "pages"
+        );
+      }
+
       logger.info("Scheduled sync completed", {
         pagesSync: synced,
         chunksCreated: chunked,
         embeddingsGenerated: embedded,
+        stalePagesRemoved: removedPages,
       });
 
       await aiOptimizationService.logSyncOperation("scheduled_sync", "success", synced);
